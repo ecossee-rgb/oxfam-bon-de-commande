@@ -49,6 +49,23 @@
     border-bottom: 2px solid var(--oxfam-green);
     padding-bottom: 6px;
   }
+  .card h2.collapsible-header {
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    user-select: none;
+  }
+  .card h2.collapsible-header:hover { color: var(--oxfam-green); }
+  .chevron {
+    display: inline-block;
+    font-size: 12px;
+    color: var(--oxfam-green);
+    transition: transform 0.15s ease;
+    margin-left: 10px;
+    flex-shrink: 0;
+  }
+  .card-body { margin-top: 4px; }
   .card h3 {
     font-size: 14px;
     margin: 16px 0 8px;
@@ -110,7 +127,7 @@
 
 <div class="wrap">
 
-  <div class="card">
+  <div class="card" id="card1">
     <h2>1. Magasin &amp; livraison</h2>
     <div class="row2">
       <div class="field">
@@ -125,7 +142,7 @@
     <p class="hint">Les onglets ci-dessous s'adaptent automatiquement à votre magasin, comme dans le fichier Excel d'origine.</p>
   </div>
 
-  <div class="card">
+  <div class="card" id="card2">
     <h2>2. Logistique</h2>
 
     <div class="field">
@@ -208,7 +225,8 @@
 
 <div class="actions">
   <button class="btn btn-secondary" id="btnReset">Réinitialiser</button>
-  <button class="btn btn-primary" id="btnExport">Télécharger le bon de commande (.xlsx) &amp; ouvrir l'email</button>
+  <button class="btn btn-secondary" id="btnExport">Télécharger une copie (.xlsx)</button>
+  <button class="btn btn-primary" id="btnSend">Envoyer le bon de commande par email</button>
 </div>
 
 <script>
@@ -416,6 +434,33 @@ const sectionBuilders = {
 
 const sectionOrder = ['textileCreme','textileMidmix','textileE5','textileKg','textileVintage','booksBroc','economat','informatique'];
 
+function wireCollapsible(card, startOpen) {
+  if (!card || card._wired) return;
+  const h2 = card.querySelector(':scope > h2');
+  if (!h2) return;
+  card._wired = true;
+  const body = document.createElement('div');
+  body.className = 'card-body';
+  let node = h2.nextSibling;
+  while (node) {
+    const next = node.nextSibling;
+    body.appendChild(node);
+    node = next;
+  }
+  card.appendChild(body);
+  const chevron = document.createElement('span');
+  chevron.className = 'chevron';
+  chevron.innerHTML = '&#9660;';
+  h2.appendChild(chevron);
+  h2.classList.add('collapsible-header');
+  function setOpen(open) {
+    body.style.display = open ? '' : 'none';
+    chevron.style.transform = open ? 'rotate(0deg)' : 'rotate(-90deg)';
+  }
+  setOpen(startOpen);
+  h2.addEventListener('click', () => setOpen(body.style.display === 'none'));
+}
+
 function renderSections() {
   dynamicSections.innerHTML = '';
   const store = storeSelect.value;
@@ -426,7 +471,9 @@ function renderSections() {
   sectionOrder.forEach(key => {
     if (flags[key]) {
       any = true;
-      dynamicSections.appendChild(sectionBuilders[key]());
+      const card = sectionBuilders[key]();
+      dynamicSections.appendChild(card);
+      wireCollapsible(card, false);
     }
   });
   noMsg.style.display = any ? 'none' : 'block';
@@ -434,6 +481,8 @@ function renderSections() {
 
 storeSelect.addEventListener('change', renderSections);
 renderSections();
+wireCollapsible(document.getElementById('card1'), true);
+wireCollapsible(document.getElementById('card2'), false);
 
 function toast(msg) {
   const t = document.getElementById('toast');
@@ -560,27 +609,70 @@ function buildWorkbook() {
   return wb;
 }
 
+function getExportFilename() {
+  const store = storeSelect.value || 'magasin';
+  const dateVal = document.getElementById('deliveryDate').value || 'sans_date';
+  const safeStore = store.replace(/[^a-z0-9]+/gi, '_');
+  return `Bon_de_commande_${safeStore}_${dateVal}.xlsx`;
+}
+
 document.getElementById('btnExport').addEventListener('click', () => {
   const store = storeSelect.value;
   if (!store) { toast("Merci de choisir votre magasin avant d'exporter."); return; }
-  const dateVal = document.getElementById('deliveryDate').value;
   if (!document.querySelector('input[name="wantDelivery"]:checked')) {
     toast('Merci de répondre à la question "Je veux une livraison".');
   }
   const wb = buildWorkbook();
-  const safeStore = store.replace(/[^a-z0-9]+/gi, '_');
-  const safeDate = dateVal || 'sans_date';
-  const filename = `Bon_de_commande_${safeStore}_${safeDate}.xlsx`;
-  XLSX.writeFile(wb, filename);
+  XLSX.writeFile(wb, getExportFilename());
+  toast('Copie téléchargée sur votre ordinateur.');
+});
 
-  const subject = encodeURIComponent(`Bon de commande - ${store} - ${dateVal || ''}`);
-  const body = encodeURIComponent(
-    `Bonjour Yunus,\n\nVeuillez trouver ci-joint le bon de commande du magasin ${store} pour une livraison le ${dateVal || '(date à préciser)'}.\n` +
-    `Merci de joindre manuellement le fichier ${filename} qui vient d'être téléchargé.\n\nMerci d'avance,\n`
-  );
-  const mailto = `mailto:YUNUS@oxfam.org?subject=${subject}&body=${body}`;
-  toast('Fichier téléchargé. Ouverture de votre messagerie : pensez à joindre le fichier .xlsx téléchargé.');
-  setTimeout(() => { window.location.href = mailto; }, 600);
+const EMAIL_TARGET = 'emmanuel.cossee@oxfam.org';
+
+document.getElementById('btnSend').addEventListener('click', async () => {
+  const store = storeSelect.value;
+  if (!store) { toast("Merci de choisir votre magasin avant d'envoyer."); return; }
+  const dateVal = document.getElementById('deliveryDate').value;
+  if (!dateVal) { toast('Merci de renseigner la date de livraison.'); return; }
+  if (!document.querySelector('input[name="wantDelivery"]:checked')) {
+    toast('Merci de répondre à la question "Je veux une livraison".');
+    return;
+  }
+
+  const sendBtn = document.getElementById('btnSend');
+  sendBtn.disabled = true;
+  toast("Envoi en cours...");
+
+  try {
+    const wb = buildWorkbook();
+    const wbArray = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    const blob = new Blob([wbArray], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const filename = getExportFilename();
+
+    const formData = new FormData();
+    formData.append('_subject', `Bon de commande - ${store} - ${dateVal}`);
+    formData.append('_captcha', 'false');
+    formData.append('_template', 'box');
+    formData.append('Magasin', store);
+    formData.append('Date de livraison', dateVal);
+    formData.append('attachment', blob, filename);
+
+    const resp = await fetch(`https://formsubmit.co/ajax/${EMAIL_TARGET}`, {
+      method: 'POST',
+      headers: { 'Accept': 'application/json' },
+      body: formData
+    });
+
+    if (resp.ok) {
+      toast(`Bon de commande envoyé à ${EMAIL_TARGET}.`);
+    } else {
+      toast("Échec de l'envoi. Si c'est le tout premier envoi vers cette adresse, vérifiez la boîte mail de " + EMAIL_TARGET + " : un email de confirmation doit être validé une seule fois, puis réessayez.");
+    }
+  } catch (e) {
+    toast("Erreur réseau lors de l'envoi. Vous pouvez télécharger une copie et l'envoyer manuellement.");
+  } finally {
+    sendBtn.disabled = false;
+  }
 });
 </script>
 
