@@ -123,6 +123,7 @@
 <header>
   <h1>Bon de commande - Bestelbon</h1>
   <p>Oxfam Magasins du monde &mdash; à envoyer à YUNUS@oxfam.org au moins 3 jours ouvrables avant la date de livraison</p>
+  <p><a href="./dashboard.html" style="color:white;">Voir le suivi de toutes les commandes &rarr;</a></p>
 </header>
 
 <div class="wrap">
@@ -629,6 +630,135 @@ document.getElementById('btnExport').addEventListener('click', () => {
 
 const EMAIL_TARGET = 'emmanuel.cossee@oxfam.org';
 
+const SUPABASE_URL = 'https://ubqshzvbsqfekziyqxyc.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_jfEushP76J1NqW9LHeEb5A_8xNHAvba';
+
+function collectAllLineItems() {
+  const store = storeSelect.value;
+  const flags = DATA.stores[store] || {};
+  const lines = [];
+
+  function pushFromDef(prefix, def, categoryLabel) {
+    if (def.groups) {
+      def.groups.forEach((g, gi) => {
+        g.items.forEach((item, ii) => {
+          const el = document.getElementById(`${prefix}__g${gi}__i${ii}`);
+          const qty = el ? parseFloat(el.value) : NaN;
+          if (qty) lines.push({ category: categoryLabel, article_fr: item[0], article_nl: item[1], quantity: qty });
+        });
+      });
+    } else {
+      def.items.forEach((item, ii) => {
+        const el = document.getElementById(`${prefix}__i${ii}`);
+        const qty = el ? parseFloat(el.value) : NaN;
+        if (qty) lines.push({ category: categoryLabel, article_fr: item[0], article_nl: item[1], quantity: qty });
+      });
+    }
+  }
+
+  if (flags.textileCreme) pushFromDef('textileCreme', DATA.textileSheets.textileCreme, DATA.textileSheets.textileCreme.label);
+  if (flags.textileMidmix) pushFromDef('textileMidmix', DATA.textileSheets.textileMidmix, DATA.textileSheets.textileMidmix.label);
+  if (flags.textileE5) pushFromDef('textileE5', DATA.textileSheets.textileE5, DATA.textileSheets.textileE5.label);
+  if (flags.textileKg) pushFromDef('textileKg', DATA.textileSheets.textileKg, DATA.textileSheets.textileKg.label);
+  if (flags.textileVintage) pushFromDef('textileVintage', DATA.textileSheets.textileVintage, DATA.textileSheets.textileVintage.label);
+  if (flags.booksBroc) pushFromDef('booksBroc', DATA.booksBroc, DATA.booksBroc.label);
+  if (flags.economat) pushFromDef('economat', DATA.economat, DATA.economat.label);
+
+  if (flags.informatique) {
+    collectDeviceRows('laptop', [{key:'marque'},{key:'type'},{key:'processeur'},{key:'memoire'},{key:'os'},{key:'stockage'},{key:'clavier'},{key:'commande'}]).forEach(r => {
+      const qty = parseFloat(r[7]);
+      if (qty) lines.push({ category: 'Informatique - Laptop', article_fr: r.slice(0,7).filter(Boolean).join(' / '), article_nl: '', quantity: qty });
+    });
+    collectDeviceRows('pc', [{key:'marque'},{key:'type'},{key:'processeur'},{key:'memoire'},{key:'windows'},{key:'stockage'},{key:'commande'}]).forEach(r => {
+      const qty = parseFloat(r[6]);
+      if (qty) lines.push({ category: 'Informatique - PC', article_fr: r.slice(0,6).filter(Boolean).join(' / '), article_nl: '', quantity: qty });
+    });
+    collectDeviceRows('accessoire', [{key:'type'},{key:'description'},{key:'commande'}]).forEach(r => {
+      const qty = parseFloat(r[2]);
+      if (qty) lines.push({ category: 'Informatique - Accessoire', article_fr: r.slice(0,2).filter(Boolean).join(' / '), article_nl: '', quantity: qty });
+    });
+  }
+
+  return lines;
+}
+
+async function logOrderToSupabase() {
+  const store = storeSelect.value;
+  const dateVal = document.getElementById('deliveryDate').value;
+  const radioVal = (name) => {
+    const r = document.querySelector(`input[name="${name}"]:checked`);
+    return r ? r.value : null;
+  };
+
+  const orderPayload = {
+    store_name: store,
+    delivery_date: dateVal || null,
+    want_delivery: radioVal('wantDelivery'),
+    want_transfer: radioVal('wantTransfer'),
+    want_return: radioVal('wantReturn'),
+    nb_chariots: parseFloat(document.getElementById('nbChariots').value) || null,
+    nb_bacs_it: parseFloat(document.getElementById('nbBacsIT').value) || null,
+    nb_sacs_monnaie: parseFloat(document.getElementById('nbSacsMonnaie').value) || null,
+    nb_cartons_livres: parseFloat(document.getElementById('nbCartonsLivres').value) || null,
+    nb_bacs_jaunes: parseFloat(document.getElementById('nbBacsJaunes').value) || null,
+    farde_compta: document.getElementById('fardeCompta').checked,
+    vidange_oft: document.getElementById('vidangeOFT').checked,
+    remarques_logistique: document.getElementById('logistiqueRemarques').value || null
+  };
+
+  const orderResp = await fetch(`${SUPABASE_URL}/rest/v1/orders`, {
+    method: 'POST',
+    headers: {
+      apikey: SUPABASE_KEY,
+      Authorization: `Bearer ${SUPABASE_KEY}`,
+      'Content-Type': 'application/json',
+      Prefer: 'return=representation'
+    },
+    body: JSON.stringify(orderPayload)
+  });
+  if (!orderResp.ok) throw new Error('order insert failed: ' + orderResp.status);
+  const orderRows = await orderResp.json();
+  const orderId = orderRows[0].id;
+
+  const lines = collectAllLineItems();
+  if (lines.length) {
+    const linesPayload = lines.map(l => Object.assign({ order_id: orderId }, l));
+    const linesResp = await fetch(`${SUPABASE_URL}/rest/v1/order_lines`, {
+      method: 'POST',
+      headers: {
+        apikey: SUPABASE_KEY,
+        Authorization: `Bearer ${SUPABASE_KEY}`,
+        'Content-Type': 'application/json',
+        Prefer: 'return=minimal'
+      },
+      body: JSON.stringify(linesPayload)
+    });
+    if (!linesResp.ok) throw new Error('lines insert failed: ' + linesResp.status);
+  }
+}
+
+async function sendEmailWithAttachment(store, dateVal) {
+  const wb = buildWorkbook();
+  const wbArray = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+  const blob = new Blob([wbArray], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const filename = getExportFilename();
+
+  const formData = new FormData();
+  formData.append('_subject', `Bon de commande - ${store} - ${dateVal}`);
+  formData.append('_captcha', 'false');
+  formData.append('_template', 'box');
+  formData.append('Magasin', store);
+  formData.append('Date de livraison', dateVal);
+  formData.append('attachment', blob, filename);
+
+  const resp = await fetch(`https://formsubmit.co/ajax/${EMAIL_TARGET}`, {
+    method: 'POST',
+    headers: { Accept: 'application/json' },
+    body: formData
+  });
+  if (!resp.ok) throw new Error('email failed: ' + resp.status);
+}
+
 document.getElementById('btnSend').addEventListener('click', async () => {
   const store = storeSelect.value;
   if (!store) { toast("Merci de choisir votre magasin avant d'envoyer."); return; }
@@ -641,38 +771,30 @@ document.getElementById('btnSend').addEventListener('click', async () => {
 
   const sendBtn = document.getElementById('btnSend');
   sendBtn.disabled = true;
-  toast("Envoi en cours...");
+  toast('Envoi en cours...');
 
-  try {
-    const wb = buildWorkbook();
-    const wbArray = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-    const blob = new Blob([wbArray], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-    const filename = getExportFilename();
+  const results = await Promise.allSettled([
+    sendEmailWithAttachment(store, dateVal),
+    logOrderToSupabase()
+  ]);
 
-    const formData = new FormData();
-    formData.append('_subject', `Bon de commande - ${store} - ${dateVal}`);
-    formData.append('_captcha', 'false');
-    formData.append('_template', 'box');
-    formData.append('Magasin', store);
-    formData.append('Date de livraison', dateVal);
-    formData.append('attachment', blob, filename);
+  const emailOk = results[0].status === 'fulfilled';
+  const dbOk = results[1].status === 'fulfilled';
 
-    const resp = await fetch(`https://formsubmit.co/ajax/${EMAIL_TARGET}`, {
-      method: 'POST',
-      headers: { 'Accept': 'application/json' },
-      body: formData
-    });
-
-    if (resp.ok) {
-      toast(`Bon de commande envoyé à ${EMAIL_TARGET}.`);
-    } else {
-      toast("Échec de l'envoi. Si c'est le tout premier envoi vers cette adresse, vérifiez la boîte mail de " + EMAIL_TARGET + " : un email de confirmation doit être validé une seule fois, puis réessayez.");
-    }
-  } catch (e) {
-    toast("Erreur réseau lors de l'envoi. Vous pouvez télécharger une copie et l'envoyer manuellement.");
-  } finally {
-    sendBtn.disabled = false;
+  if (emailOk && dbOk) {
+    toast(`Bon de commande envoyé à ${EMAIL_TARGET} et enregistré dans le suivi des commandes.`);
+  } else if (emailOk && !dbOk) {
+    console.error(results[1].reason);
+    toast("Email envoyé, mais l'enregistrement dans le suivi des commandes a échoué. Réessayez plus tard.");
+  } else if (!emailOk && dbOk) {
+    console.error(results[0].reason);
+    toast("Enregistré dans le suivi des commandes, mais l'envoi de l'email a échoué (vérifiez la confirmation FormSubmit si c'est le premier envoi).");
+  } else {
+    console.error(results[0].reason, results[1].reason);
+    toast("Échec de l'envoi et de l'enregistrement. Réessayez, ou téléchargez une copie et envoyez-la manuellement.");
   }
+
+  sendBtn.disabled = false;
 });
 </script>
 

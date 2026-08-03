@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Suivi des commandes - Oxfam Magasins du monde</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<style>
+  :root {
+    --oxfam-green: #00693e;
+    --oxfam-dark: #00351f;
+    --bg: #f4f6f5;
+    --border: #d7ded9;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    background: var(--bg);
+    margin: 0;
+    padding: 0;
+    color: #1a1a1a;
+  }
+  header {
+    background: var(--oxfam-green);
+    color: white;
+    padding: 20px 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  header h1 { margin: 0; font-size: 22px; }
+  header p { margin: 4px 0 0; font-size: 13px; opacity: 0.9; }
+  header a.back-link { color: white; font-size: 13px; opacity: 0.9; }
+  .wrap { max-width: 1200px; margin: 0 auto; padding: 20px 16px 60px; }
+  .card {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 20px;
+    margin-bottom: 16px;
+  }
+  .card h2 {
+    font-size: 15px;
+    margin: 0 0 12px;
+    color: var(--oxfam-dark);
+    border-bottom: 2px solid var(--oxfam-green);
+    padding-bottom: 6px;
+  }
+  .filters { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-end; }
+  .filters .field { min-width: 160px; flex: 1; }
+  label { font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px; color: #333; }
+  select, input[type=date] {
+    width: 100%; padding: 7px 8px; border: 1px solid #c7cfca; border-radius: 6px; font-size: 13px; font-family: inherit;
+  }
+  .btn { padding: 8px 16px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; border: none; background: var(--oxfam-green); color: white; }
+  .btn-secondary { background: white; color: var(--oxfam-dark); border: 1px solid var(--oxfam-green); }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; }
+  .kpi { background: #eef5f1; border-radius: 8px; padding: 14px 16px; text-align: center; }
+  .kpi .value { font-size: 26px; font-weight: 700; color: var(--oxfam-dark); }
+  .kpi .label { font-size: 12px; color: #556; margin-top: 4px; }
+  table.report { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.report th {
+    text-align: left; font-size: 11px; text-transform: uppercase; color: #666;
+    padding: 8px; border-bottom: 2px solid var(--border); position: sticky; top: 0; background: white; cursor: pointer;
+  }
+  table.report td { padding: 7px 8px; border-bottom: 1px solid #eee; vertical-align: top; }
+  table.report tbody tr:hover { background: #f8faf9; }
+  .table-scroll { max-height: 480px; overflow: auto; border: 1px solid var(--border); border-radius: 8px; }
+  .pill { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 11px; }
+  .pill-oui { background: #dff3e6; color: #1e6b3a; }
+  .pill-non { background: #f3e6e6; color: #8a2f2f; }
+  .details-row td { background: #fafcfb; }
+  .details-toggle { cursor: pointer; color: var(--oxfam-green); font-size: 12px; text-decoration: underline; }
+  .lines-table { width: 100%; border-collapse: collapse; font-size: 12px; margin: 6px 0; }
+  .lines-table th, .lines-table td { padding: 4px 8px; border-bottom: 1px solid #eee; text-align: left; }
+  .empty-msg { color: #888; font-style: italic; font-size: 13px; padding: 20px; text-align: center; }
+  canvas { max-height: 320px; }
+  .status-msg { font-size: 13px; color: #666; margin-bottom: 10px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>Suivi des commandes</h1>
+    <p>Oxfam Magasins du monde &mdash; toutes les commandes envoyées via le formulaire</p>
+  </div>
+  <a class="back-link" href="./index.html">&larr; Retour au formulaire</a>
+</header>
+
+<div class="wrap">
+
+  <div class="card">
+    <h2>Filtres</h2>
+    <div class="filters">
+      <div class="field">
+        <label>Magasin</label>
+        <select id="filterStore"><option value="">Tous les magasins</option></select>
+      </div>
+      <div class="field">
+        <label>Catégorie</label>
+        <select id="filterCategory"><option value="">Toutes les catégories</option></select>
+      </div>
+      <div class="field">
+        <label>Date de livraison - du</label>
+        <input type="date" id="filterDateFrom">
+      </div>
+      <div class="field">
+        <label>Date de livraison - au</label>
+        <input type="date" id="filterDateTo">
+      </div>
+      <div class="field" style="flex: 0 0 auto;">
+        <button class="btn btn-secondary" id="btnResetFilters">Réinitialiser</button>
+      </div>
+      <div class="field" style="flex: 0 0 auto;">
+        <button class="btn" id="btnRefresh">Rafraîchir</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="statusMsg" class="status-msg">Chargement des données...</div>
+
+  <div class="card">
+    <h2>Vue d'ensemble</h2>
+    <div class="kpis">
+      <div class="kpi"><div class="value" id="kpiOrders">-</div><div class="label">Commandes</div></div>
+      <div class="kpi"><div class="value" id="kpiStores">-</div><div class="label">Magasins actifs</div></div>
+      <div class="kpi"><div class="value" id="kpiQty">-</div><div class="label">Quantité totale commandée</div></div>
+      <div class="kpi"><div class="value" id="kpiLast">-</div><div class="label">Dernière commande envoyée</div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Quantités par catégorie</h2>
+    <canvas id="categoryChart"></canvas>
+  </div>
+
+  <div class="card">
+    <h2>Quantités par magasin et catégorie</h2>
+    <div class="table-scroll">
+      <table class="report" id="pivotTable">
+        <thead><tr id="pivotHeadRow"></tr></thead>
+        <tbody id="pivotBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Commandes</h2>
+    <div class="table-scroll">
+      <table class="report" id="ordersTable">
+        <thead>
+          <tr>
+            <th data-sort="store_name">Magasin</th>
+            <th data-sort="delivery_date">Date livraison</th>
+            <th data-sort="created_at">Envoyée le</th>
+            <th data-sort="want_delivery">Livraison</th>
+            <th data-sort="want_transfer">Transfert</th>
+            <th data-sort="want_return">Retour</th>
+            <th>Remarques</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="ordersBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const SUPABASE_URL = 'https://ubqshzvbsqfekziyqxyc.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_jfEushP76J1NqW9LHeEb5A_8xNHAvba';
+
+let allOrders = [];
+let allLines = [];
+let sortKey = 'created_at';
+let sortDir = 'desc';
+let chartInstance = null;
+
+async function fetchAll() {
+  const statusMsg = document.getElementById('statusMsg');
+  statusMsg.textContent = 'Chargement des données...';
+  try {
+    const [ordersResp, linesResp] = await Promise.all([
+      fetch(`${SUPABASE_URL}/rest/v1/orders?select=*&order=created_at.desc&limit=2000`, {
+        headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
+      }),
+      fetch(`${SUPABASE_URL}/rest/v1/order_lines?select=*&limit=20000`, {
+        headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
+      })
+    ]);
+    if (!ordersResp.ok || !linesResp.ok) throw new Error('fetch failed');
+    allOrders = await ordersResp.json();
+    allLines = await linesResp.json();
+    statusMsg.textContent = `${allOrders.length} commande(s) chargée(s).`;
+    populateFilterOptions();
+    renderAll();
+  } catch (e) {
+    console.error(e);
+    statusMsg.textContent = "Erreur lors du chargement des données. Vérifiez la connexion, puis cliquez sur Rafraîchir.";
+  }
+}
+
+function populateFilterOptions() {
+  const storeSel = document.getElementById('filterStore');
+  const catSel = document.getElementById('filterCategory');
+  const currentStore = storeSel.value;
+  const currentCat = catSel.value;
+
+  const stores = Array.from(new Set(allOrders.map(o => o.store_name))).sort();
+  storeSel.innerHTML = '<option value="">Tous les magasins</option>' +
+    stores.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('');
+  storeSel.value = currentStore;
+
+  const cats = Array.from(new Set(allLines.map(l => l.category))).sort();
+  catSel.innerHTML = '<option value="">Toutes les catégories</option>' +
+    cats.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+  catSel.value = currentCat;
+}
+
+function escapeHtml(str) {
+  if (str === null || str === undefined) return '';
+  return String(str).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function getFilters() {
+  return {
+    store: document.getElementById('filterStore').value,
+    category: document.getElementById('filterCategory').value,
+    dateFrom: document.getElementById('filterDateFrom').value,
+    dateTo: document.getElementById('filterDateTo').value
+  };
+}
+
+function filterOrders(orders, f) {
+  return orders.filter(o => {
+    if (f.store && o.store_name !== f.store) return false;
+    if (f.dateFrom && o.delivery_date && o.delivery_date < f.dateFrom) return false;
+    if (f.dateTo && o.delivery_date && o.delivery_date > f.dateTo) return false;
+    return true;
+  });
+}
+
+function filterLines(lines, f, orderIdsInScope) {
+  return lines.filter(l => {
+    if (!orderIdsInScope.has(l.order_id)) return false;
+    if (f.category && l.category !== f.category) return false;
+    return true;
+  });
+}
+
+function renderKpis(orders, lines) {
+  document.getElementById('kpiOrders').textContent = orders.length;
+  document.getElementById('kpiStores').textContent = new Set(orders.map(o => o.store_name)).size;
+  const totalQty = lines.reduce((s, l) => s + (parseFloat(l.quantity) || 0), 0);
+  document.getElementById('kpiQty').textContent = totalQty.toLocaleString('fr-BE');
+  if (orders.length) {
+    const last = orders.reduce((a, b) => (new Date(a.created_at) > new Date(b.created_at) ? a : b));
+    document.getElementById('kpiLast').textContent = new Date(last.created_at).toLocaleString('fr-BE');
+  } else {
+    document.getElementById('kpiLast').textContent = '-';
+  }
+}
+
+function renderChart(lines) {
+  const totals = {};
+  lines.forEach(l => { totals[l.category] = (totals[l.category] || 0) + (parseFloat(l.quantity) || 0); });
+  const labels = Object.keys(totals).sort();
+  const data = labels.map(l => totals[l]);
+
+  const ctx = document.getElementById('categoryChart');
+  if (!window.Chart) return;
+  if (chartInstance) chartInstance.destroy();
+  chartInstance = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{ label: 'Quantité commandée', data, backgroundColor: '#00693e' }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: { x: { ticks: { autoSkip: false, maxRotation: 60, minRotation: 30 } } }
+    }
+  });
+}
+
+function renderPivot(orders, lines) {
+  const orderStoreMap = {};
+  orders.forEach(o => { orderStoreMap[o.id] = o.store_name; });
+
+  const stores = Array.from(new Set(orders.map(o => o.store_name))).sort();
+  const categories = Array.from(new Set(lines.map(l => l.category))).sort();
+
+  const matrix = {};
+  stores.forEach(s => { matrix[s] = {}; categories.forEach(c => matrix[s][c] = 0); });
+  lines.forEach(l => {
+    const store = orderStoreMap[l.order_id];
+    if (!store || !matrix[store]) return;
+    matrix[store][l.category] = (matrix[store][l.category] || 0) + (parseFloat(l.quantity) || 0);
+  });
+
+  const headRow = document.getElementById('pivotHeadRow');
+  const body = document.getElementById('pivotBody');
+
+  if (!stores.length || !categories.length) {
+    headRow.innerHTML = '<th>Magasin</th>';
+    body.innerHTML = `<tr><td class="empty-msg">Aucune donnée pour ces filtres.</td></tr>`;
+    return;
+  }
+
+  headRow.innerHTML = '<th>Magasin</th>' + categories.map(c => `<th>${escapeHtml(c)}</th>`).join('') + '<th>Total</th>';
+  body.innerHTML = stores.map(s => {
+    const rowTotal = categories.reduce((sum, c) => sum + (matrix[s][c] || 0), 0);
+    return `<tr><td>${escapeHtml(s)}</td>` +
+      categories.map(c => `<td>${matrix[s][c] ? matrix[s][c].toLocaleString('fr-BE') : ''}</td>`).join('') +
+      `<td><strong>${rowTotal.toLocaleString('fr-BE')}</strong></td></tr>`;
+  }).join('');
+}
+
+function pill(val) {
+  if (val === 'oui') return '<span class="pill pill-oui">Oui</span>';
+  if (val === 'non') return '<span class="pill pill-non">Non</span>';
+  return '-';
+}
+
+function renderOrdersTable(orders, allLinesForScope) {
+  const body = document.getElementById('ordersBody');
+  if (!orders.length) {
+    body.innerHTML = `<tr><td colspan="8" class="empty-msg">Aucune commande pour ces filtres.</td></tr>`;
+    return;
+  }
+
+  const sorted = [...orders].sort((a, b) => {
+    let av = a[sortKey], bv = b[sortKey];
+    if (av === null || av === undefined) av = '';
+    if (bv === null || bv === undefined) bv = '';
+    if (av < bv) return sortDir === 'asc' ? -1 : 1;
+    if (av > bv) return sortDir === 'asc' ? 1 : -1;
+    return 0;
+  });
+
+  const linesByOrder = {};
+  allLinesForScope.forEach(l => {
+    (linesByOrder[l.order_id] = linesByOrder[l.order_id] || []).push(l);
+  });
+
+  body.innerHTML = sorted.map(o => {
+    const lines = linesByOrder[o.id] || [];
+    const rowId = `details-${o.id}`;
+    return `
+      <tr>
+        <td>${escapeHtml(o.store_name)}</td>
+        <td>${escapeHtml(o.delivery_date)}</td>
+        <td>${o.created_at ? new Date(o.created_at).toLocaleString('fr-BE') : ''}</td>
+        <td>${pill(o.want_delivery)}</td>
+        <td>${pill(o.want_transfer)}</td>
+        <td>${pill(o.want_return)}</td>
+        <td>${escapeHtml(o.remarques_logistique)}</td>
+        <td><span class="details-toggle" data-target="${rowId}">Détails (${lines.length})</span></td>
+      </tr>
+      <tr class="details-row" id="${rowId}" style="display:none;">
+        <td colspan="8">
+          ${lines.length ? `
+            <table class="lines-table">
+              <thead><tr><th>Catégorie</th><th>Article (FR)</th><th>Article (NL)</th><th>Quantité</th></tr></thead>
+              <tbody>
+                ${lines.map(l => `<tr><td>${escapeHtml(l.category)}</td><td>${escapeHtml(l.article_fr)}</td><td>${escapeHtml(l.article_nl)}</td><td>${l.quantity}</td></tr>`).join('')}
+              </tbody>
+            </table>
+          ` : "<em>Aucune ligne d'article (commande logistique uniquement).</em>"}
+          ${o.nb_chariots || o.nb_bacs_it || o.nb_sacs_monnaie || o.nb_cartons_livres || o.nb_bacs_jaunes ? `
+            <div style="margin-top:6px; font-size:12px; color:#555;">
+              ${o.nb_chariots ? `Chariots retour: ${o.nb_chariots}. ` : ''}
+              ${o.nb_bacs_it ? `Bacs réparations IT: ${o.nb_bacs_it}. ` : ''}
+              ${o.nb_sacs_monnaie ? `Sacs monnaie: ${o.nb_sacs_monnaie}. ` : ''}
+              ${o.nb_cartons_livres ? `Cartons livres: ${o.nb_cartons_livres}. ` : ''}
+              ${o.nb_bacs_jaunes ? `Bacs jaunes: ${o.nb_bacs_jaunes}.` : ''}
+            </div>
+          ` : ''}
+        </td>
+      </tr>
+    `;
+  }).join('');
+
+  body.querySelectorAll('.details-toggle').forEach(el => {
+    el.addEventListener('click', () => {
+      const target = document.getElementById(el.getAttribute('data-target'));
+      target.style.display = target.style.display === 'none' ? '' : 'none';
+    });
+  });
+}
+
+function renderAll() {
+  const f = getFilters();
+  const scopedOrders = filterOrders(allOrders, f);
+  const orderIdsInScope = new Set(scopedOrders.map(o => o.id));
+  const scopedLines = filterLines(allLines, f, orderIdsInScope);
+
+  renderKpis(scopedOrders, scopedLines);
+  renderChart(scopedLines);
+  renderPivot(scopedOrders, scopedLines);
+  renderOrdersTable(scopedOrders, scopedLines);
+}
+
+document.getElementById('filterStore').addEventListener('change', renderAll);
+document.getElementById('filterCategory').addEventListener('change', renderAll);
+document.getElementById('filterDateFrom').addEventListener('change', renderAll);
+document.getElementById('filterDateTo').addEventListener('change', renderAll);
+document.getElementById('btnResetFilters').addEventListener('click', () => {
+  document.getElementById('filterStore').value = '';
+  document.getElementById('filterCategory').value = '';
+  document.getElementById('filterDateFrom').value = '';
+  document.getElementById('filterDateTo').value = '';
+  renderAll();
+});
+document.getElementById('btnRefresh').addEventListener('click', fetchAll);
+
+document.querySelectorAll('#ordersTable th[data-sort]').forEach(th => {
+  th.addEventListener('click', () => {
+    const key = th.getAttribute('data-sort');
+    if (sortKey === key) { sortDir = sortDir === 'asc' ? 'desc' : 'asc'; }
+    else { sortKey = key; sortDir = 'asc'; }
+    renderAll();
+  });
+});
+
+fetchAll();
+</script>
+
+</body>
+</html>
