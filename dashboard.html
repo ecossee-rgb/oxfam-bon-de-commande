@@ -86,39 +86,39 @@
   <div style="display:flex; align-items:center; gap:16px;">
     <img src="./logo-oxfam.png" alt="Oxfam" style="height:56px; width:auto; background:white; border-radius:8px; padding:4px;">
     <div>
-      <h1>Suivi des commandes</h1>
-      <p>Oxfam Magasins du monde &mdash; toutes les commandes envoyées via le formulaire</p>
+      <h1>Suivi des commandes - Opvolging van bestellingen</h1>
+      <p>Oxfam Magasins du monde &mdash; toutes les commandes envoyées via le formulaire / alle bestellingen verzonden via het formulier</p>
     </div>
   </div>
-  <a class="back-link" href="./index.html">&larr; Retour au formulaire</a>
+  <a class="back-link" href="./index.html">&larr; Retour au formulaire / Terug naar het formulier</a>
 </header>
 
 <div class="wrap">
 
   <div class="card">
-    <h2>Filtres</h2>
+    <h2>Filtres / Filters</h2>
     <div class="filters">
       <div class="field">
-        <label>Magasin</label>
-        <select id="filterStore"><option value="">Tous les magasins</option></select>
+        <label>Magasin / Winkel</label>
+        <select id="filterStore"><option value="">Tous les magasins / Alle winkels</option></select>
       </div>
       <div class="field">
-        <label>Catégorie</label>
+        <label>Catégorie / Categorie</label>
         <select id="filterCategory"><option value="">Toutes les catégories</option></select>
       </div>
       <div class="field">
-        <label>Date de livraison - du</label>
+        <label>Date de livraison - du / Leveringsdatum - van</label>
         <input type="date" id="filterDateFrom">
       </div>
       <div class="field">
-        <label>Date de livraison - au</label>
+        <label>Date de livraison - au / Leveringsdatum - tot</label>
         <input type="date" id="filterDateTo">
       </div>
       <div class="field" style="flex: 0 0 auto;">
-        <button class="btn btn-secondary" id="btnResetFilters">Réinitialiser</button>
+        <button class="btn btn-secondary" id="btnResetFilters">Réinitialiser / Reset</button>
       </div>
       <div class="field" style="flex: 0 0 auto;">
-        <button class="btn" id="btnRefresh">Rafraîchir</button>
+        <button class="btn" id="btnRefresh">Rafraîchir / Vernieuwen</button>
       </div>
     </div>
   </div>
@@ -126,22 +126,22 @@
   <div id="statusMsg" class="status-msg">Chargement des données...</div>
 
   <div class="card">
-    <h2>Vue d'ensemble</h2>
+    <h2>Vue d'ensemble / Overzicht</h2>
     <div class="kpis">
-      <div class="kpi"><div class="value" id="kpiOrders">-</div><div class="label">Commandes</div></div>
-      <div class="kpi"><div class="value" id="kpiStores">-</div><div class="label">Magasins actifs</div></div>
-      <div class="kpi"><div class="value" id="kpiQty">-</div><div class="label">Quantité totale commandée</div></div>
-      <div class="kpi"><div class="value" id="kpiLast">-</div><div class="label">Dernière commande envoyée</div></div>
+      <div class="kpi"><div class="value" id="kpiOrders">-</div><div class="label">Commandes / Bestellingen</div></div>
+      <div class="kpi"><div class="value" id="kpiStores">-</div><div class="label">Magasins actifs / Actieve winkels</div></div>
+      <div class="kpi"><div class="value" id="kpiQty">-</div><div class="label">Quantité totale commandée / Totaal bestelde hoeveelheid</div></div>
+      <div class="kpi"><div class="value" id="kpiLast">-</div><div class="label">Dernière commande envoyée / Laatst verzonden bestelling</div></div>
     </div>
   </div>
 
   <div class="card">
-    <h2>Quantités par catégorie</h2>
+    <h2>Quantités par catégorie / Hoeveelheden per categorie</h2>
     <canvas id="categoryChart"></canvas>
   </div>
 
   <div class="card">
-    <h2>Quantités par magasin et catégorie</h2>
+    <h2>Quantités par magasin et catégorie / Hoeveelheden per winkel en categorie</h2>
     <div class="table-scroll">
       <table class="report" id="pivotTable">
         <thead><tr id="pivotHeadRow"></tr></thead>
@@ -151,18 +151,18 @@
   </div>
 
   <div class="card">
-    <h2>Commandes</h2>
+    <h2>Commandes / Bestellingen</h2>
     <div class="table-scroll">
       <table class="report" id="ordersTable">
         <thead>
           <tr>
-            <th data-sort="store_name">Magasin</th>
-            <th data-sort="delivery_date">Date livraison</th>
-            <th data-sort="created_at">Envoyée le</th>
-            <th data-sort="want_delivery">Livraison</th>
+            <th data-sort="store_name">Magasin / Winkel</th>
+            <th data-sort="delivery_date">Date livraison / Leveringsdatum</th>
+            <th data-sort="created_at">Envoyée le / Verzonden op</th>
+            <th data-sort="want_delivery">Livraison / Levering</th>
             <th data-sort="want_transfer">Transfert</th>
-            <th data-sort="want_return">Retour</th>
-            <th>Remarques</th>
+            <th data-sort="want_return">Retour / Terugkeer</th>
+            <th>Remarques / Opmerkingen</th>
             <th></th>
           </tr>
         </thead>
@@ -185,7 +185,7 @@ let chartInstance = null;
 
 async function fetchAll() {
   const statusMsg = document.getElementById('statusMsg');
-  statusMsg.textContent = 'Chargement des données...';
+  statusMsg.textContent = 'Chargement des données... / Gegevens laden...';
   try {
     const [ordersResp, linesResp] = await Promise.all([
       fetch(`${SUPABASE_URL}/rest/v1/orders?select=*&order=created_at.desc&limit=2000`, {
@@ -198,12 +198,12 @@ async function fetchAll() {
     if (!ordersResp.ok || !linesResp.ok) throw new Error('fetch failed');
     allOrders = await ordersResp.json();
     allLines = await linesResp.json();
-    statusMsg.textContent = `${allOrders.length} commande(s) chargée(s).`;
+    statusMsg.textContent = `${allOrders.length} commande(s) charg\u00e9e(s). / ${allOrders.length} bestelling(en) geladen.`;
     populateFilterOptions();
     renderAll();
   } catch (e) {
     console.error(e);
-    statusMsg.textContent = "Erreur lors du chargement des données. Vérifiez la connexion, puis cliquez sur Rafraîchir.";
+    statusMsg.textContent = "Erreur lors du chargement des données. Vérifiez la connexion, puis cliquez sur Rafraîchir. / Fout bij het laden van de gegevens. Controleer de verbinding en klik op Vernieuwen.";
   }
 }
 
@@ -214,12 +214,12 @@ function populateFilterOptions() {
   const currentCat = catSel.value;
 
   const stores = Array.from(new Set(allOrders.map(o => o.store_name))).sort();
-  storeSel.innerHTML = '<option value="">Tous les magasins</option>' +
+  storeSel.innerHTML = '<option value="">Tous les magasins / Alle winkels</option>' +
     stores.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('');
   storeSel.value = currentStore;
 
   const cats = Array.from(new Set(allLines.map(l => l.category))).sort();
-  catSel.innerHTML = '<option value="">Toutes les catégories</option>' +
+  catSel.innerHTML = '<option value="">Toutes les catégories / Alle categorieën</option>' +
     cats.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
   catSel.value = currentCat;
 }
@@ -281,7 +281,7 @@ function renderChart(lines) {
     type: 'bar',
     data: {
       labels,
-      datasets: [{ label: 'Quantité commandée', data, backgroundColor: '#00693e' }]
+      datasets: [{ label: 'Quantité commandée / Bestelde hoeveelheid', data, backgroundColor: '#00693e' }]
     },
     options: {
       responsive: true,
@@ -310,12 +310,12 @@ function renderPivot(orders, lines) {
   const body = document.getElementById('pivotBody');
 
   if (!stores.length || !categories.length) {
-    headRow.innerHTML = '<th>Magasin</th>';
-    body.innerHTML = `<tr><td class="empty-msg">Aucune donnée pour ces filtres.</td></tr>`;
+    headRow.innerHTML = '<th>Magasin / Winkel</th>';
+    body.innerHTML = `<tr><td class="empty-msg">Aucune donnée pour ces filtres. / Geen gegevens voor deze filters.</td></tr>`;
     return;
   }
 
-  headRow.innerHTML = '<th>Magasin</th>' + categories.map(c => `<th>${escapeHtml(c)}</th>`).join('') + '<th>Total</th>';
+  headRow.innerHTML = '<th>Magasin / Winkel</th>' + categories.map(c => `<th>${escapeHtml(c)}</th>`).join('') + '<th>Total / Totaal</th>';
   body.innerHTML = stores.map(s => {
     const rowTotal = categories.reduce((sum, c) => sum + (matrix[s][c] || 0), 0);
     return `<tr><td>${escapeHtml(s)}</td>` +
@@ -325,15 +325,15 @@ function renderPivot(orders, lines) {
 }
 
 function pill(val) {
-  if (val === 'oui') return '<span class="pill pill-oui">Oui</span>';
-  if (val === 'non') return '<span class="pill pill-non">Non</span>';
+  if (val === 'oui') return '<span class="pill pill-oui">Oui / Ja</span>';
+  if (val === 'non') return '<span class="pill pill-non">Non / Neen</span>';
   return '-';
 }
 
 function renderOrdersTable(orders, allLinesForScope) {
   const body = document.getElementById('ordersBody');
   if (!orders.length) {
-    body.innerHTML = `<tr><td colspan="8" class="empty-msg">Aucune commande pour ces filtres.</td></tr>`;
+    body.innerHTML = `<tr><td colspan="8" class="empty-msg">Aucune commande pour ces filtres. / Geen bestellingen voor deze filters.</td></tr>`;
     return;
   }
 
@@ -363,25 +363,25 @@ function renderOrdersTable(orders, allLinesForScope) {
         <td>${pill(o.want_transfer)}</td>
         <td>${pill(o.want_return)}</td>
         <td>${escapeHtml(o.remarques_logistique)}</td>
-        <td><span class="details-toggle" data-target="${rowId}">Détails (${lines.length})</span></td>
+        <td><span class="details-toggle" data-target="${rowId}">Détails / Details (${lines.length})</span></td>
       </tr>
       <tr class="details-row" id="${rowId}" style="display:none;">
         <td colspan="8">
           ${lines.length ? `
             <table class="lines-table">
-              <thead><tr><th>Catégorie</th><th>Article (FR)</th><th>Article (NL)</th><th>Quantité</th></tr></thead>
+              <thead><tr><th>Catégorie / Categorie</th><th>Article (FR)</th><th>Article (NL)</th><th>Quantité / Aantal</th></tr></thead>
               <tbody>
                 ${lines.map(l => `<tr><td>${escapeHtml(l.category)}</td><td>${escapeHtml(l.article_fr)}</td><td>${escapeHtml(l.article_nl)}</td><td>${l.quantity}</td></tr>`).join('')}
               </tbody>
             </table>
-          ` : "<em>Aucune ligne d'article (commande logistique uniquement).</em>"}
+          ` : "<em>Aucune ligne d'article (commande logistique uniquement). / Geen artikelregel (enkel logistieke bestelling).</em>"}
           ${o.nb_chariots || o.nb_bacs_it || o.nb_sacs_monnaie || o.nb_cartons_livres || o.nb_bacs_jaunes ? `
             <div style="margin-top:6px; font-size:12px; color:#555;">
-              ${o.nb_chariots ? `Chariots retour: ${o.nb_chariots}. ` : ''}
-              ${o.nb_bacs_it ? `Bacs réparations IT: ${o.nb_bacs_it}. ` : ''}
-              ${o.nb_sacs_monnaie ? `Sacs monnaie: ${o.nb_sacs_monnaie}. ` : ''}
-              ${o.nb_cartons_livres ? `Cartons livres: ${o.nb_cartons_livres}. ` : ''}
-              ${o.nb_bacs_jaunes ? `Bacs jaunes: ${o.nb_bacs_jaunes}.` : ''}
+              ${o.nb_chariots ? `Chariots retour / Rolkarren terugkeer: ${o.nb_chariots}. ` : ''}
+              ${o.nb_bacs_it ? `Bacs réparations IT / Bakken reparaties IT: ${o.nb_bacs_it}. ` : ''}
+              ${o.nb_sacs_monnaie ? `Sacs monnaie / Zakken kleingeld: ${o.nb_sacs_monnaie}. ` : ''}
+              ${o.nb_cartons_livres ? `Cartons livres / Kartonnen dozen boeken: ${o.nb_cartons_livres}. ` : ''}
+              ${o.nb_bacs_jaunes ? `Bacs jaunes / Gele bakken: ${o.nb_bacs_jaunes}.` : ''}
             </div>
           ` : ''}
         </td>
