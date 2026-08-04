@@ -133,6 +133,8 @@
 
 <div class="wrap">
 
+  <div id="editBanner" style="display:none; background:#fff3cd; border:1px solid #ffe08a; color:#664d03; border-radius:8px; padding:12px 16px; margin-bottom:16px; font-size:13px;"></div>
+
   <div class="card" id="card1">
     <h2>1. Magasin &amp; livraison / Winkel &amp; levering</h2>
     <div class="row2">
@@ -143,6 +145,7 @@
       <div class="field">
         <label>Date de livraison / Leveringsdatum</label>
         <input type="date" id="deliveryDate">
+        <p class="hint" id="deliveryDateHint"></p>
       </div>
     </div>
     <p class="hint">Les onglets ci-dessous s'adaptent automatiquement &agrave; votre magasin, comme dans le fichier Excel d'origine. / De onderstaande tabbladen passen zich automatisch aan uw winkel aan, net als in het oorspronkelijke Excel-bestand.</p>
@@ -244,6 +247,42 @@ Object.keys(DATA.stores).sort().forEach(name => {
   opt.value = name; opt.textContent = name;
   storeSelect.appendChild(opt);
 });
+
+// Delivery date must be at least 3 working days (Mon-Fri) from today.
+function computeMinDeliveryDate() {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  let added = 0;
+  while (added < 3) {
+    d.setDate(d.getDate() + 1);
+    const day = d.getDay(); // 0 = Sunday, 6 = Saturday
+    if (day !== 0 && day !== 6) added++;
+  }
+  return d;
+}
+function formatDateISO(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+function formatDateHuman(d) {
+  return d.toLocaleDateString('fr-BE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+const MIN_DELIVERY_DATE = computeMinDeliveryDate();
+const MIN_DELIVERY_DATE_ISO = formatDateISO(MIN_DELIVERY_DATE);
+function isDeliveryDateValid(dateStr) {
+  return !!dateStr && dateStr >= MIN_DELIVERY_DATE_ISO;
+}
+const deliveryDateInput = document.getElementById('deliveryDate');
+if (deliveryDateInput) {
+  deliveryDateInput.min = MIN_DELIVERY_DATE_ISO;
+  const deliveryDateHint = document.getElementById('deliveryDateHint');
+  if (deliveryDateHint) {
+    const humanDate = formatDateHuman(MIN_DELIVERY_DATE);
+    deliveryDateHint.textContent = `Date la plus proche possible : ${humanDate} (minimum 3 jours ouvrables). / Vroegst mogelijke datum: ${humanDate} (minimum 3 werkdagen).`;
+  }
+}
 
 const dynamicSections = document.getElementById('dynamicSections');
 
@@ -386,7 +425,7 @@ function buildInformatiqueCard() {
   ];
   const laptopTable = buildDeviceTable('laptop', laptopCols, 1);
   card.appendChild(laptopTable);
-  const btnLaptop = el('button', {type:'button', class:'btn-add', text:'+ Ajouter une ligne laptop / Laptoprij toevoegen'});
+  const btnLaptop = el('button', {type:'button', class:'btn-add', id:'btnAddLaptopRow', text:'+ Ajouter une ligne laptop / Laptoprij toevoegen'});
   btnLaptop.onclick = () => {
     document.getElementById('laptop__tbody').appendChild(deviceRow('laptop', laptopTable._nextIdx++, laptopCols));
   };
@@ -404,7 +443,7 @@ function buildInformatiqueCard() {
   ];
   const pcTable = buildDeviceTable('pc', pcCols, 1);
   card.appendChild(pcTable);
-  const btnPc = el('button', {type:'button', class:'btn-add', text:'+ Ajouter une ligne PC / PC-rij toevoegen'});
+  const btnPc = el('button', {type:'button', class:'btn-add', id:'btnAddPcRow', text:'+ Ajouter une ligne PC / PC-rij toevoegen'});
   btnPc.onclick = () => {
     document.getElementById('pc__tbody').appendChild(deviceRow('pc', pcTable._nextIdx++, pcCols));
   };
@@ -418,7 +457,7 @@ function buildInformatiqueCard() {
   ];
   const accTable = buildDeviceTable('accessoire', accCols, 1);
   card.appendChild(accTable);
-  const btnAcc = el('button', {type:'button', class:'btn-add', text:'+ Ajouter une ligne accessoire / Accessoirerij toevoegen'});
+  const btnAcc = el('button', {type:'button', class:'btn-add', id:'btnAddAccessoireRow', text:'+ Ajouter une ligne accessoire / Accessoirerij toevoegen'});
   btnAcc.onclick = () => {
     document.getElementById('accessoire__tbody').appendChild(deviceRow('accessoire', accTable._nextIdx++, accCols));
   };
@@ -625,8 +664,14 @@ function getExportFilename() {
 document.getElementById('btnExport').addEventListener('click', () => {
   const store = storeSelect.value;
   if (!store) { toast("Merci de choisir votre magasin avant d'exporter. / Gelieve uw winkel te kiezen voordat u exporteert."); return; }
+  const dateVal = document.getElementById('deliveryDate').value;
+  if (!isDeliveryDateValid(dateVal)) {
+    toast(`La date de livraison doit être au moins 3 jours ouvrables après aujourd'hui (à partir du ${formatDateHuman(MIN_DELIVERY_DATE)}). / De leveringsdatum moet minstens 3 werkdagen na vandaag liggen (vanaf ${formatDateHuman(MIN_DELIVERY_DATE)}).`);
+    return;
+  }
   if (!document.querySelector('input[name="wantDelivery"]:checked')) {
     toast('Merci de répondre à la question "Je veux une livraison". / Gelieve de vraag "Ik wil een levering" te beantwoorden.');
+    return;
   }
   const wb = buildWorkbook();
   XLSX.writeFile(wb, getExportFilename());
@@ -634,6 +679,7 @@ document.getElementById('btnExport').addEventListener('click', () => {
 });
 
 const EMAIL_TARGET = 'emmanuel.cossee@oxfam.org';
+const EDIT_PASSCODE = 'oxfam2026';
 
 const SUPABASE_URL = 'https://ubqshzvbsqfekziyqxyc.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_jfEushP76J1NqW9LHeEb5A_8xNHAvba';
@@ -687,6 +733,48 @@ function collectAllLineItems() {
   return lines;
 }
 
+function collectFormSnapshot() {
+  const fields = {};
+  document.querySelectorAll('.wrap input[id], .wrap select[id], .wrap textarea[id]').forEach(elm => {
+    if (elm.type === 'checkbox') fields[elm.id] = elm.checked;
+    else fields[elm.id] = elm.value;
+  });
+  const radioGroups = {};
+  document.querySelectorAll('.wrap input[type="radio"][name]').forEach(r => {
+    if (r.checked) radioGroups[r.name] = r.value;
+  });
+  const deviceRowCounts = {};
+  ['laptop', 'pc', 'accessoire'].forEach(prefix => {
+    const tbody = document.getElementById(`${prefix}__tbody`);
+    deviceRowCounts[prefix] = tbody ? tbody.children.length : 0;
+  });
+  return { fields, radioGroups, deviceRowCounts };
+}
+
+function applyFormSnapshot(snapshot) {
+  if (!snapshot) return;
+  const addButtonIds = { laptop: 'btnAddLaptopRow', pc: 'btnAddPcRow', accessoire: 'btnAddAccessoireRow' };
+  Object.keys(snapshot.deviceRowCounts || {}).forEach(prefix => {
+    const wantCount = snapshot.deviceRowCounts[prefix] || 0;
+    const tbody = document.getElementById(`${prefix}__tbody`);
+    const addBtn = document.getElementById(addButtonIds[prefix]);
+    if (!tbody || !addBtn) return;
+    while (tbody.children.length < wantCount) addBtn.click();
+  });
+  Object.keys(snapshot.fields || {}).forEach(id => {
+    const elm = document.getElementById(id);
+    if (!elm) return;
+    if (elm.type === 'checkbox') elm.checked = !!snapshot.fields[id];
+    else elm.value = snapshot.fields[id];
+  });
+  Object.keys(snapshot.radioGroups || {}).forEach(name => {
+    const val = snapshot.radioGroups[name];
+    document.querySelectorAll(`input[type="radio"][name="${name}"]`).forEach(r => {
+      r.checked = (r.value === val);
+    });
+  });
+}
+
 async function logOrderToSupabase() {
   const store = storeSelect.value;
   const dateVal = document.getElementById('deliveryDate').value;
@@ -694,6 +782,8 @@ async function logOrderToSupabase() {
     const r = document.querySelector(`input[name="${name}"]:checked`);
     return r ? r.value : null;
   };
+
+  const editOrderId = window.__editOrderId || null;
 
   const orderPayload = {
     store_name: store,
@@ -708,22 +798,49 @@ async function logOrderToSupabase() {
     nb_bacs_jaunes: parseFloat(document.getElementById('nbBacsJaunes').value) || null,
     farde_compta: document.getElementById('fardeCompta').checked,
     vidange_oft: document.getElementById('vidangeOFT').checked,
-    remarques_logistique: document.getElementById('logistiqueRemarques').value || null
+    remarques_logistique: document.getElementById('logistiqueRemarques').value || null,
+    form_snapshot: collectFormSnapshot()
   };
 
-  const orderResp = await fetch(`${SUPABASE_URL}/rest/v1/orders`, {
-    method: 'POST',
-    headers: {
-      apikey: SUPABASE_KEY,
-      Authorization: `Bearer ${SUPABASE_KEY}`,
-      'Content-Type': 'application/json',
-      Prefer: 'return=representation'
-    },
-    body: JSON.stringify(orderPayload)
-  });
-  if (!orderResp.ok) throw new Error('order insert failed: ' + orderResp.status);
-  const orderRows = await orderResp.json();
-  const orderId = orderRows[0].id;
+  let orderId;
+  if (editOrderId) {
+    const updateResp = await fetch(`${SUPABASE_URL}/rest/v1/orders?id=eq.${editOrderId}`, {
+      method: 'PATCH',
+      headers: {
+        apikey: SUPABASE_KEY,
+        Authorization: `Bearer ${SUPABASE_KEY}`,
+        'Content-Type': 'application/json',
+        Prefer: 'return=representation'
+      },
+      body: JSON.stringify(orderPayload)
+    });
+    if (!updateResp.ok) throw new Error('order update failed: ' + updateResp.status);
+    orderId = editOrderId;
+
+    // Replace existing line items with the freshly edited set.
+    const deleteResp = await fetch(`${SUPABASE_URL}/rest/v1/order_lines?order_id=eq.${editOrderId}`, {
+      method: 'DELETE',
+      headers: {
+        apikey: SUPABASE_KEY,
+        Authorization: `Bearer ${SUPABASE_KEY}`
+      }
+    });
+    if (!deleteResp.ok) throw new Error('lines delete failed: ' + deleteResp.status);
+  } else {
+    const orderResp = await fetch(`${SUPABASE_URL}/rest/v1/orders`, {
+      method: 'POST',
+      headers: {
+        apikey: SUPABASE_KEY,
+        Authorization: `Bearer ${SUPABASE_KEY}`,
+        'Content-Type': 'application/json',
+        Prefer: 'return=representation'
+      },
+      body: JSON.stringify(orderPayload)
+    });
+    if (!orderResp.ok) throw new Error('order insert failed: ' + orderResp.status);
+    const orderRows = await orderResp.json();
+    orderId = orderRows[0].id;
+  }
 
   const lines = collectAllLineItems();
   if (lines.length) {
@@ -813,14 +930,43 @@ document.getElementById('btnSend').addEventListener('click', async () => {
   if (!store) { toast("Merci de choisir votre magasin avant d'envoyer. / Gelieve uw winkel te kiezen voordat u verstuurt."); return; }
   const dateVal = document.getElementById('deliveryDate').value;
   if (!dateVal) { toast('Merci de renseigner la date de livraison. / Gelieve de leveringsdatum in te vullen.'); return; }
+  if (!isDeliveryDateValid(dateVal)) {
+    toast(`La date de livraison doit être au moins 3 jours ouvrables après aujourd'hui (à partir du ${formatDateHuman(MIN_DELIVERY_DATE)}). / De leveringsdatum moet minstens 3 werkdagen na vandaag liggen (vanaf ${formatDateHuman(MIN_DELIVERY_DATE)}).`);
+    return;
+  }
   if (!document.querySelector('input[name="wantDelivery"]:checked')) {
     toast('Merci de répondre à la question "Je veux une livraison". / Gelieve de vraag "Ik wil een levering" te beantwoorden.');
     return;
   }
 
+  const isEditMode = !!window.__editOrderId;
+
+  if (isEditMode) {
+    const entered = window.prompt('Code de modification requis / Wijzigingscode vereist:');
+    if (entered === null) return; // cancelled
+    if (entered !== EDIT_PASSCODE) {
+      toast('Code incorrect. Modifications non enregistrées. / Onjuiste code. Wijzigingen niet opgeslagen.');
+      return;
+    }
+  }
+
   const sendBtn = document.getElementById('btnSend');
   sendBtn.disabled = true;
-  toast('Envoi en cours... / Bezig met verzenden...');
+  toast(isEditMode ? 'Enregistrement en cours... / Bezig met opslaan...' : 'Envoi en cours... / Bezig met verzenden...');
+
+  if (isEditMode) {
+    // Editing an existing order only updates the tracked record - it does not
+    // resend the email, to avoid spamming the recipient on every edit.
+    try {
+      await logOrderToSupabase();
+      toast('Modifications enregistrées dans le suivi des commandes. / Wijzigingen opgeslagen in de bestelopvolging.');
+    } catch (e) {
+      console.error(e);
+      toast("Échec de l'enregistrement des modifications. Réessayez plus tard. / Opslaan van de wijzigingen is mislukt. Probeer het later opnieuw.");
+    }
+    sendBtn.disabled = false;
+    return;
+  }
 
   const results = await Promise.allSettled([
     sendEmailWithAttachment(store, dateVal),
@@ -850,6 +996,49 @@ document.getElementById('btnSend').addEventListener('click', async () => {
 
   sendBtn.disabled = false;
 });
+
+// --- Edit mode: reload an existing order from Supabase for editing ---
+async function bootstrapEditMode() {
+  const params = new URLSearchParams(window.location.search);
+  const editId = params.get('edit');
+  if (!editId) return;
+
+  try {
+    const resp = await fetch(`${SUPABASE_URL}/rest/v1/orders?id=eq.${encodeURIComponent(editId)}&select=*`, {
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
+    });
+    if (!resp.ok) throw new Error('fetch order failed: ' + resp.status);
+    const rows = await resp.json();
+    if (!rows.length) {
+      toast("Commande introuvable pour la modification. / Bestelling niet gevonden om te wijzigen.");
+      return;
+    }
+    const order = rows[0];
+    if (!order.form_snapshot) {
+      toast("Cette commande a été enregistrée avant l'ajout de la fonction de modification et ne peut pas être rechargée automatiquement. / Deze bestelling werd geregistreerd vóór de wijzigingsfunctie en kan niet automatisch worden herladen.");
+      return;
+    }
+
+    window.__editOrderId = order.id;
+
+    storeSelect.value = order.store_name;
+    renderSections();
+    applyFormSnapshot(order.form_snapshot);
+
+    const sendBtn = document.getElementById('btnSend');
+    sendBtn.textContent = 'Enregistrer les modifications / Wijzigingen opslaan';
+
+    const banner = document.getElementById('editBanner');
+    banner.style.display = 'block';
+    banner.textContent = `Modification de la commande n°${order.id} (${order.store_name}, livraison le ${order.delivery_date || '?'}). Les modifications remplaceront la commande existante. / Wijziging van bestelling nr. ${order.id} (${order.store_name}, levering op ${order.delivery_date || '?'}). De wijzigingen vervangen de bestaande bestelling.`;
+
+    window.scrollTo(0, 0);
+  } catch (e) {
+    console.error(e);
+    toast("Impossible de charger la commande à modifier. / De te wijzigen bestelling kon niet worden geladen.");
+  }
+}
+bootstrapEditMode();
 </script>
 
 </body>

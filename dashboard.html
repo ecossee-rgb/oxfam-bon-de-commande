@@ -164,6 +164,7 @@
             <th data-sort="want_return">Retour / Terugkeer</th>
             <th>Remarques / Opmerkingen</th>
             <th></th>
+            <th>Actions</th>
           </tr>
         </thead>
         <tbody id="ordersBody"></tbody>
@@ -333,7 +334,7 @@ function pill(val) {
 function renderOrdersTable(orders, allLinesForScope) {
   const body = document.getElementById('ordersBody');
   if (!orders.length) {
-    body.innerHTML = `<tr><td colspan="8" class="empty-msg">Aucune commande pour ces filtres. / Geen bestellingen voor deze filters.</td></tr>`;
+    body.innerHTML = `<tr><td colspan="9" class="empty-msg">Aucune commande pour ces filtres. / Geen bestellingen voor deze filters.</td></tr>`;
     return;
   }
 
@@ -364,9 +365,10 @@ function renderOrdersTable(orders, allLinesForScope) {
         <td>${pill(o.want_return)}</td>
         <td>${escapeHtml(o.remarques_logistique)}</td>
         <td><span class="details-toggle" data-target="${rowId}">Détails / Details (${lines.length})</span></td>
+        <td><a href="index.html?edit=${encodeURIComponent(o.id)}" class="edit-link" style="color:var(--oxfam-green); font-weight:600; text-decoration:none;">Modifier / Wijzigen</a></td>
       </tr>
       <tr class="details-row" id="${rowId}" style="display:none;">
-        <td colspan="8">
+        <td colspan="9">
           ${lines.length ? `
             <table class="lines-table">
               <thead><tr><th>Catégorie / Categorie</th><th>Article (FR)</th><th>Article (NL)</th><th>Quantité / Aantal</th></tr></thead>
