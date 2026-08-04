@@ -377,7 +377,11 @@ function deviceRow(prefix, idx, fields) {
     if (f.type === 'select') {
       const sel = el('select', {id:`${prefix}__${f.key}__${idx}`});
       sel.appendChild(el('option', {value:'', text:'--'}));
-      f.options.forEach(o => sel.appendChild(el('option', {value:o, text:o})));
+      f.options.forEach(o => {
+        const val = (o && typeof o === 'object') ? o.value : o;
+        const label = (o && typeof o === 'object') ? o.label : o;
+        sel.appendChild(el('option', {value: val, text: label}));
+      });
       td.appendChild(sel);
     } else if (f.type === 'number') {
       td.appendChild(el('input', {type:'number', min:'0', id:`${prefix}__${f.key}__${idx}`}));
@@ -407,19 +411,58 @@ function buildDeviceTable(prefix, columns, rowCount) {
   return table;
 }
 
+// Live stock lookup (Odoo, via a Supabase Edge Function that keeps the
+// Odoo API key server-side). Populates the "Modèle" dropdowns in the
+// Informatique section instead of free-text brand/model/spec fields.
+const ODOO_STOCK_URL = 'https://ubqshzvbsqfekziyqxyc.supabase.co/functions/v1/odoo-stock';
+const odooStockOptions = { laptop: [], pc: [], accessoire: [] };
+const odooStockRawCache = {};
+const odooStockLoaded = {};
+
+function fetchOdooStockRaw(category) {
+  if (!odooStockRawCache[category]) {
+    odooStockRawCache[category] = fetch(`${ODOO_STOCK_URL}?category=${category}`, {
+      headers: { apikey: SUPABASE_KEY }
+    }).then(r => r.json()).then(j => j.items || []).catch(e => {
+      console.error('odoo stock fetch failed for', category, e);
+      return [];
+    });
+  }
+  return odooStockRawCache[category];
+}
+
+function ensureOdooStockLoaded(category) {
+  if (!odooStockLoaded[category]) {
+    odooStockLoaded[category] = fetchOdooStockRaw(category).then(items => {
+      odooStockOptions[category].length = 0;
+      items.forEach(it => odooStockOptions[category].push({
+        value: it.name,
+        label: `${it.name} (${it.qty} en stock / op voorraad)`
+      }));
+    });
+  }
+  return odooStockLoaded[category];
+}
+
+function refreshModeleSelects(prefix) {
+  document.querySelectorAll(`select[id^="${prefix}__modele__"]`).forEach(sel => {
+    const current = sel.value;
+    sel.innerHTML = '';
+    sel.appendChild(el('option', {value:'', text:'--'}));
+    odooStockOptions[prefix].forEach(o => sel.appendChild(el('option', {value:o.value, text:o.label})));
+    if (current) sel.value = current;
+  });
+}
+
 function buildInformatiqueCard() {
   const card = el('div', {class:'card', id:'card__informatique'});
   card.appendChild(el('h2', {text:'Informatique - Informatica'}));
-  card.appendChild(el('p', {class:'hint', text:"Une ligne par type de produit (laptop, PC et/ou accessoire). / Één regel per producttype (laptop, PC en/of accessoire)."}));
+  card.appendChild(el('p', {class:'hint', text:"Une ligne par type de produit (laptop, PC et/ou accessoire). Les modèles et le stock disponible viennent d'Odoo. / Één regel per producttype (laptop, PC en/of accessoire). De modellen en de beschikbare voorraad komen uit Odoo."}));
 
   card.appendChild(el('h3', {text:'Laptops'}));
   const laptopCols = [
-    {key:'marque', label:'Marque / Merk', type:'text'},
-    {key:'type', label:'Type', type:'text'},
-    {key:'processeur', label:'Processeur / Processor', type:'text'},
-    {key:'memoire', label:'Mémoire (Gb) / Geheugen (Gb)', type:'text'},
+    {key:'modele', label:'Modèle / Model', type:'select', options: odooStockOptions.laptop},
     {key:'os', label:'OS', type:'select', options: DATA.osOptions},
-    {key:'stockage', label:'SSD/HDD', type:'text'},
     {key:'clavier', label:'Clavier / Toetsenbord', type:'select', options:['AZERTY','QWERTY']},
     {key:'commande', label:'Commandé / Besteld', type:'number'}
   ];
@@ -430,15 +473,12 @@ function buildInformatiqueCard() {
     document.getElementById('laptop__tbody').appendChild(deviceRow('laptop', laptopTable._nextIdx++, laptopCols));
   };
   card.appendChild(btnLaptop);
+  ensureOdooStockLoaded('laptop').then(() => refreshModeleSelects('laptop'));
 
   card.appendChild(el('h3', {text:'PC'}));
   const pcCols = [
-    {key:'marque', label:'Marque / Merk', type:'text'},
-    {key:'type', label:'Type', type:'text'},
-    {key:'processeur', label:'Processeur / Processor', type:'text'},
-    {key:'memoire', label:'Mémoire (Gb) / Geheugen (Gb)', type:'text'},
+    {key:'modele', label:'Modèle / Model', type:'select', options: odooStockOptions.pc},
     {key:'windows', label:'Windows', type:'select', options:['10','11']},
-    {key:'stockage', label:'SSD/HDD', type:'text'},
     {key:'commande', label:'Commandé / Besteld', type:'number'}
   ];
   const pcTable = buildDeviceTable('pc', pcCols, 1);
@@ -448,11 +488,12 @@ function buildInformatiqueCard() {
     document.getElementById('pc__tbody').appendChild(deviceRow('pc', pcTable._nextIdx++, pcCols));
   };
   card.appendChild(btnPc);
+  ensureOdooStockLoaded('pc').then(() => refreshModeleSelects('pc'));
 
   card.appendChild(el('h3', {text:'Accessoires'}));
   const accCols = [
-    {key:'type', label:'Type', type:'text'},
-    {key:'description', label:'Description / Beschrijving', type:'text'},
+    {key:'modele', label:'Modèle / Model', type:'select', options: odooStockOptions.accessoire},
+    {key:'remarque', label:'Remarque / Opmerking', type:'text'},
     {key:'commande', label:'Commandé / Besteld', type:'number'}
   ];
   const accTable = buildDeviceTable('accessoire', accCols, 1);
@@ -462,6 +503,7 @@ function buildInformatiqueCard() {
     document.getElementById('accessoire__tbody').appendChild(deviceRow('accessoire', accTable._nextIdx++, accCols));
   };
   card.appendChild(btnAcc);
+  ensureOdooStockLoaded('accessoire').then(() => refreshModeleSelects('accessoire'));
 
   return card;
 }
@@ -637,16 +679,16 @@ function buildWorkbook() {
   if (flags.informatique) {
     const rows = [['INFORMATIQUE / INFORMATICA'], []];
     rows.push(['LAPTOPS']);
-    rows.push(['Marque','Type','Processeur','Mémoire (Gb)','OS','SSD/HDD','Clavier','Commandé']);
-    collectDeviceRows('laptop', [{key:'marque'},{key:'type'},{key:'processeur'},{key:'memoire'},{key:'os'},{key:'stockage'},{key:'clavier'},{key:'commande'}]).forEach(r => rows.push(r));
+    rows.push(['Modèle','OS','Clavier','Commandé']);
+    collectDeviceRows('laptop', [{key:'modele'},{key:'os'},{key:'clavier'},{key:'commande'}]).forEach(r => rows.push(r));
     rows.push([]);
     rows.push(['PC']);
-    rows.push(['Marque','Type','Processeur','Mémoire (Gb)','Windows','SSD/HDD','Commandé']);
-    collectDeviceRows('pc', [{key:'marque'},{key:'type'},{key:'processeur'},{key:'memoire'},{key:'windows'},{key:'stockage'},{key:'commande'}]).forEach(r => rows.push(r));
+    rows.push(['Modèle','Windows','Commandé']);
+    collectDeviceRows('pc', [{key:'modele'},{key:'windows'},{key:'commande'}]).forEach(r => rows.push(r));
     rows.push([]);
     rows.push(['ACCESSOIRES']);
-    rows.push(['Type','Description','Commandé']);
-    collectDeviceRows('accessoire', [{key:'type'},{key:'description'},{key:'commande'}]).forEach(r => rows.push(r));
+    rows.push(['Modèle','Remarque','Commandé']);
+    collectDeviceRows('accessoire', [{key:'modele'},{key:'remarque'},{key:'commande'}]).forEach(r => rows.push(r));
     const sheet = XLSX.utils.aoa_to_sheet(rows);
     XLSX.utils.book_append_sheet(wb, sheet, 'Informatique');
   }
@@ -716,15 +758,15 @@ function collectAllLineItems() {
   if (flags.economat) pushFromDef('economat', DATA.economat, DATA.economat.label);
 
   if (flags.informatique) {
-    collectDeviceRows('laptop', [{key:'marque'},{key:'type'},{key:'processeur'},{key:'memoire'},{key:'os'},{key:'stockage'},{key:'clavier'},{key:'commande'}]).forEach(r => {
-      const qty = parseFloat(r[7]);
-      if (qty) lines.push({ category: 'Informatique - Laptop', article_fr: r.slice(0,7).filter(Boolean).join(' / '), article_nl: '', quantity: qty });
+    collectDeviceRows('laptop', [{key:'modele'},{key:'os'},{key:'clavier'},{key:'commande'}]).forEach(r => {
+      const qty = parseFloat(r[3]);
+      if (qty) lines.push({ category: 'Informatique - Laptop', article_fr: r.slice(0,3).filter(Boolean).join(' / '), article_nl: '', quantity: qty });
     });
-    collectDeviceRows('pc', [{key:'marque'},{key:'type'},{key:'processeur'},{key:'memoire'},{key:'windows'},{key:'stockage'},{key:'commande'}]).forEach(r => {
-      const qty = parseFloat(r[6]);
-      if (qty) lines.push({ category: 'Informatique - PC', article_fr: r.slice(0,6).filter(Boolean).join(' / '), article_nl: '', quantity: qty });
+    collectDeviceRows('pc', [{key:'modele'},{key:'windows'},{key:'commande'}]).forEach(r => {
+      const qty = parseFloat(r[2]);
+      if (qty) lines.push({ category: 'Informatique - PC', article_fr: r.slice(0,2).filter(Boolean).join(' / '), article_nl: '', quantity: qty });
     });
-    collectDeviceRows('accessoire', [{key:'type'},{key:'description'},{key:'commande'}]).forEach(r => {
+    collectDeviceRows('accessoire', [{key:'modele'},{key:'remarque'},{key:'commande'}]).forEach(r => {
       const qty = parseFloat(r[2]);
       if (qty) lines.push({ category: 'Informatique - Accessoire', article_fr: r.slice(0,2).filter(Boolean).join(' / '), article_nl: '', quantity: qty });
     });
@@ -751,8 +793,15 @@ function collectFormSnapshot() {
   return { fields, radioGroups, deviceRowCounts };
 }
 
-function applyFormSnapshot(snapshot) {
+async function applyFormSnapshot(snapshot) {
   if (!snapshot) return;
+
+  // The "Modèle" dropdowns in the Informatique section are populated live
+  // from Odoo; make sure that data has arrived (and the already-rendered
+  // selects have been refreshed with it) before we try to select a value.
+  await Promise.all(['laptop', 'pc', 'accessoire'].map(ensureOdooStockLoaded));
+  ['laptop', 'pc', 'accessoire'].forEach(refreshModeleSelects);
+
   const addButtonIds = { laptop: 'btnAddLaptopRow', pc: 'btnAddPcRow', accessoire: 'btnAddAccessoireRow' };
   Object.keys(snapshot.deviceRowCounts || {}).forEach(prefix => {
     const wantCount = snapshot.deviceRowCounts[prefix] || 0;
@@ -1023,7 +1072,7 @@ async function bootstrapEditMode() {
 
     storeSelect.value = order.store_name;
     renderSections();
-    applyFormSnapshot(order.form_snapshot);
+    await applyFormSnapshot(order.form_snapshot);
 
     const sendBtn = document.getElementById('btnSend');
     sendBtn.textContent = 'Enregistrer les modifications / Wijzigingen opslaan';
