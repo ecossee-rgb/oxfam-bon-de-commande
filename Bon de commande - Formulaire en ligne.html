@@ -415,7 +415,7 @@ function buildDeviceTable(prefix, columns, rowCount) {
 // Odoo API key server-side). Populates the "Modèle" dropdowns in the
 // Informatique section instead of free-text brand/model/spec fields.
 const ODOO_STOCK_URL = 'https://ubqshzvbsqfekziyqxyc.supabase.co/functions/v1/odoo-stock';
-const odooStockOptions = { laptop: [], pc: [], accessoire: [] };
+const odooStockOptions = { laptop: [], desktop: [], display: [], accessoire: [], misc: [], printer: [], projector: [], smartphone: [], tablet: [] };
 const odooStockRawCache = {};
 const odooStockLoaded = {};
 
@@ -454,56 +454,61 @@ function refreshModeleSelects(prefix) {
   });
 }
 
+function remarqueCol() {
+  return [{key:'remarque', label:'Remarque / Opmerking', type:'text'}];
+}
+
+// One entry per Odoo product category shown in the Informatique section.
+// "prefix" doubles as the category query param sent to the odoo-stock
+// Edge Function, and as the id prefix for that category's table/inputs.
+const INFO_CATEGORIES = [
+  { prefix:'laptop', title:'Laptops', addLabel:'+ Ajouter une ligne laptop / Laptoprij toevoegen',
+    extraColumns: () => ([
+      {key:'os', label:'OS', type:'select', options: DATA.osOptions},
+      {key:'clavier', label:'Clavier / Toetsenbord', type:'select', options:['AZERTY','QWERTY']}
+    ]) },
+  { prefix:'desktop', title:'Desktops', addLabel:'+ Ajouter une ligne desktop / Desktoprij toevoegen',
+    extraColumns: () => ([
+      {key:'windows', label:'Windows', type:'select', options:['10','11']}
+    ]) },
+  { prefix:'display', title:'Displays', addLabel:'+ Ajouter une ligne display / Displayrij toevoegen', extraColumns: remarqueCol },
+  { prefix:'accessoire', title:'Accessoires', addLabel:'+ Ajouter une ligne accessoire / Accessoirerij toevoegen', extraColumns: remarqueCol },
+  { prefix:'misc', title:'Divers / Overige', addLabel:'+ Ajouter une ligne / Rij toevoegen', extraColumns: remarqueCol },
+  { prefix:'printer', title:'Imprimantes / Printers', addLabel:'+ Ajouter une ligne imprimante / Printerrij toevoegen', extraColumns: remarqueCol },
+  { prefix:'projector', title:'Projecteurs / Projectors', addLabel:'+ Ajouter une ligne projecteur / Projectorrij toevoegen', extraColumns: remarqueCol },
+  { prefix:'smartphone', title:'Smartphones', addLabel:'+ Ajouter une ligne smartphone / Smartphonerij toevoegen', extraColumns: remarqueCol },
+  { prefix:'tablet', title:'Tablettes / Tablets', addLabel:'+ Ajouter une ligne tablette / Tabletrij toevoegen', extraColumns: remarqueCol }
+];
+INFO_CATEGORIES.forEach(cat => {
+  cat.btnId = `btnAdd${cat.prefix.charAt(0).toUpperCase()}${cat.prefix.slice(1)}Row`;
+});
+
+// French labels used for the Excel export headers (key -> header text).
+const INFO_COLUMN_LABELS_FR = { modele:'Modèle', os:'OS', clavier:'Clavier', windows:'Windows', remarque:'Remarque', commande:'Commandé' };
+
+function infoColumns(cat) {
+  return [{key:'modele', label:'Modèle / Model', type:'select', options: odooStockOptions[cat.prefix]}]
+    .concat(cat.extraColumns())
+    .concat([{key:'commande', label:'Commandé / Besteld', type:'number'}]);
+}
+
 function buildInformatiqueCard() {
   const card = el('div', {class:'card', id:'card__informatique'});
   card.appendChild(el('h2', {text:'Informatique - Informatica'}));
-  card.appendChild(el('p', {class:'hint', text:"Une ligne par type de produit (laptop, PC et/ou accessoire). Les modèles et le stock disponible viennent d'Odoo. / Één regel per producttype (laptop, PC en/of accessoire). De modellen en de beschikbare voorraad komen uit Odoo."}));
+  card.appendChild(el('p', {class:'hint', text:"Une ligne par type de produit. Les modèles et le stock disponible viennent d'Odoo (seuls les articles en stock sont proposés). / Één regel per producttype. De modellen en de beschikbare voorraad komen uit Odoo (enkel artikelen op voorraad worden voorgesteld)."}));
 
-  card.appendChild(el('h3', {text:'Laptops'}));
-  const laptopCols = [
-    {key:'modele', label:'Modèle / Model', type:'select', options: odooStockOptions.laptop},
-    {key:'os', label:'OS', type:'select', options: DATA.osOptions},
-    {key:'clavier', label:'Clavier / Toetsenbord', type:'select', options:['AZERTY','QWERTY']},
-    {key:'commande', label:'Commandé / Besteld', type:'number'}
-  ];
-  const laptopTable = buildDeviceTable('laptop', laptopCols, 1);
-  card.appendChild(laptopTable);
-  const btnLaptop = el('button', {type:'button', class:'btn-add', id:'btnAddLaptopRow', text:'+ Ajouter une ligne laptop / Laptoprij toevoegen'});
-  btnLaptop.onclick = () => {
-    document.getElementById('laptop__tbody').appendChild(deviceRow('laptop', laptopTable._nextIdx++, laptopCols));
-  };
-  card.appendChild(btnLaptop);
-  ensureOdooStockLoaded('laptop').then(() => refreshModeleSelects('laptop'));
-
-  card.appendChild(el('h3', {text:'PC'}));
-  const pcCols = [
-    {key:'modele', label:'Modèle / Model', type:'select', options: odooStockOptions.pc},
-    {key:'windows', label:'Windows', type:'select', options:['10','11']},
-    {key:'commande', label:'Commandé / Besteld', type:'number'}
-  ];
-  const pcTable = buildDeviceTable('pc', pcCols, 1);
-  card.appendChild(pcTable);
-  const btnPc = el('button', {type:'button', class:'btn-add', id:'btnAddPcRow', text:'+ Ajouter une ligne PC / PC-rij toevoegen'});
-  btnPc.onclick = () => {
-    document.getElementById('pc__tbody').appendChild(deviceRow('pc', pcTable._nextIdx++, pcCols));
-  };
-  card.appendChild(btnPc);
-  ensureOdooStockLoaded('pc').then(() => refreshModeleSelects('pc'));
-
-  card.appendChild(el('h3', {text:'Accessoires'}));
-  const accCols = [
-    {key:'modele', label:'Modèle / Model', type:'select', options: odooStockOptions.accessoire},
-    {key:'remarque', label:'Remarque / Opmerking', type:'text'},
-    {key:'commande', label:'Commandé / Besteld', type:'number'}
-  ];
-  const accTable = buildDeviceTable('accessoire', accCols, 1);
-  card.appendChild(accTable);
-  const btnAcc = el('button', {type:'button', class:'btn-add', id:'btnAddAccessoireRow', text:'+ Ajouter une ligne accessoire / Accessoirerij toevoegen'});
-  btnAcc.onclick = () => {
-    document.getElementById('accessoire__tbody').appendChild(deviceRow('accessoire', accTable._nextIdx++, accCols));
-  };
-  card.appendChild(btnAcc);
-  ensureOdooStockLoaded('accessoire').then(() => refreshModeleSelects('accessoire'));
+  INFO_CATEGORIES.forEach(cat => {
+    card.appendChild(el('h3', {text: cat.title}));
+    const cols = infoColumns(cat);
+    const table = buildDeviceTable(cat.prefix, cols, 1);
+    card.appendChild(table);
+    const btn = el('button', {type:'button', class:'btn-add', id: cat.btnId, text: cat.addLabel});
+    btn.onclick = () => {
+      document.getElementById(`${cat.prefix}__tbody`).appendChild(deviceRow(cat.prefix, table._nextIdx++, cols));
+    };
+    card.appendChild(btn);
+    ensureOdooStockLoaded(cat.prefix).then(() => refreshModeleSelects(cat.prefix));
+  });
 
   return card;
 }
@@ -678,17 +683,13 @@ function buildWorkbook() {
 
   if (flags.informatique) {
     const rows = [['INFORMATIQUE / INFORMATICA'], []];
-    rows.push(['LAPTOPS']);
-    rows.push(['Modèle','OS','Clavier','Commandé']);
-    collectDeviceRows('laptop', [{key:'modele'},{key:'os'},{key:'clavier'},{key:'commande'}]).forEach(r => rows.push(r));
-    rows.push([]);
-    rows.push(['PC']);
-    rows.push(['Modèle','Windows','Commandé']);
-    collectDeviceRows('pc', [{key:'modele'},{key:'windows'},{key:'commande'}]).forEach(r => rows.push(r));
-    rows.push([]);
-    rows.push(['ACCESSOIRES']);
-    rows.push(['Modèle','Remarque','Commandé']);
-    collectDeviceRows('accessoire', [{key:'modele'},{key:'remarque'},{key:'commande'}]).forEach(r => rows.push(r));
+    INFO_CATEGORIES.forEach((cat, i) => {
+      const cols = infoColumns(cat);
+      if (i > 0) rows.push([]);
+      rows.push([cat.title.toUpperCase()]);
+      rows.push(cols.map(c => INFO_COLUMN_LABELS_FR[c.key] || c.label));
+      collectDeviceRows(cat.prefix, cols).forEach(r => rows.push(r));
+    });
     const sheet = XLSX.utils.aoa_to_sheet(rows);
     XLSX.utils.book_append_sheet(wb, sheet, 'Informatique');
   }
@@ -758,17 +759,13 @@ function collectAllLineItems() {
   if (flags.economat) pushFromDef('economat', DATA.economat, DATA.economat.label);
 
   if (flags.informatique) {
-    collectDeviceRows('laptop', [{key:'modele'},{key:'os'},{key:'clavier'},{key:'commande'}]).forEach(r => {
-      const qty = parseFloat(r[3]);
-      if (qty) lines.push({ category: 'Informatique - Laptop', article_fr: r.slice(0,3).filter(Boolean).join(' / '), article_nl: '', quantity: qty });
-    });
-    collectDeviceRows('pc', [{key:'modele'},{key:'windows'},{key:'commande'}]).forEach(r => {
-      const qty = parseFloat(r[2]);
-      if (qty) lines.push({ category: 'Informatique - PC', article_fr: r.slice(0,2).filter(Boolean).join(' / '), article_nl: '', quantity: qty });
-    });
-    collectDeviceRows('accessoire', [{key:'modele'},{key:'remarque'},{key:'commande'}]).forEach(r => {
-      const qty = parseFloat(r[2]);
-      if (qty) lines.push({ category: 'Informatique - Accessoire', article_fr: r.slice(0,2).filter(Boolean).join(' / '), article_nl: '', quantity: qty });
+    INFO_CATEGORIES.forEach(cat => {
+      const cols = infoColumns(cat);
+      const qtyIdx = cols.findIndex(c => c.key === 'commande');
+      collectDeviceRows(cat.prefix, cols).forEach(r => {
+        const qty = parseFloat(r[qtyIdx]);
+        if (qty) lines.push({ category: `Informatique - ${cat.title}`, article_fr: r.slice(0, qtyIdx).filter(Boolean).join(' / '), article_nl: '', quantity: qty });
+      });
     });
   }
 
@@ -786,9 +783,9 @@ function collectFormSnapshot() {
     if (r.checked) radioGroups[r.name] = r.value;
   });
   const deviceRowCounts = {};
-  ['laptop', 'pc', 'accessoire'].forEach(prefix => {
-    const tbody = document.getElementById(`${prefix}__tbody`);
-    deviceRowCounts[prefix] = tbody ? tbody.children.length : 0;
+  INFO_CATEGORIES.forEach(cat => {
+    const tbody = document.getElementById(`${cat.prefix}__tbody`);
+    deviceRowCounts[cat.prefix] = tbody ? tbody.children.length : 0;
   });
   return { fields, radioGroups, deviceRowCounts };
 }
@@ -799,10 +796,12 @@ async function applyFormSnapshot(snapshot) {
   // The "Modèle" dropdowns in the Informatique section are populated live
   // from Odoo; make sure that data has arrived (and the already-rendered
   // selects have been refreshed with it) before we try to select a value.
-  await Promise.all(['laptop', 'pc', 'accessoire'].map(ensureOdooStockLoaded));
-  ['laptop', 'pc', 'accessoire'].forEach(refreshModeleSelects);
+  const infoPrefixes = INFO_CATEGORIES.map(c => c.prefix);
+  await Promise.all(infoPrefixes.map(ensureOdooStockLoaded));
+  infoPrefixes.forEach(refreshModeleSelects);
 
-  const addButtonIds = { laptop: 'btnAddLaptopRow', pc: 'btnAddPcRow', accessoire: 'btnAddAccessoireRow' };
+  const addButtonIds = {};
+  INFO_CATEGORIES.forEach(c => { addButtonIds[c.prefix] = c.btnId; });
   Object.keys(snapshot.deviceRowCounts || {}).forEach(prefix => {
     const wantCount = snapshot.deviceRowCounts[prefix] || 0;
     const tbody = document.getElementById(`${prefix}__tbody`);
