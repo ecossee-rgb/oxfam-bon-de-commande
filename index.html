@@ -96,9 +96,9 @@
   .legend { font-size: 12px; margin: 6px 0 14px; padding: 8px 10px; background: #fff8e6; border: 1px solid #f0dca0; border-radius: 6px; }
   .legend span { display: inline-block; padding: 1px 8px; border-radius: 10px; color: white; font-size: 11px; margin-right: 6px; }
   .dot-red { background: var(--red); } .dot-yellow { background: var(--yellow); } .dot-green { background: var(--green2); }
-  table.items th.color-th { text-align: center; width: 64px; white-space: nowrap; }
+  table.items th.color-th { text-align: center; width: 90px; white-space: nowrap; }
   table.items td.color-td { text-align: center; }
-  table.items td.color-td input[type=checkbox] { width: 18px; height: 18px; cursor: pointer; }
+  table.items td.color-td input[type=number] { width: 70px; }
   .color-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 4px; vertical-align: middle; }
   .color-dot.red { background: var(--red); } .color-dot.yellow { background: var(--yellow); } .color-dot.green { background: var(--green2); }
   .subtabs { display: none; }
@@ -318,14 +318,15 @@ function buildQtyTable(sectionKey, groups) {
     const showColors = groupHasColorCheckboxes(sectionKey, g.title);
     container.appendChild(el('div', {class:'group-title', text: g.title}));
     const table = el('table', {class:'items'});
-    const headerCells = [
-      el('th', {text:'Article (FR / NL)'}),
-      el('th', {text:'Commandé / Besteld'})
-    ];
+    const headerCells = [el('th', {text:'Article (FR / NL)'})];
     if (showColors) {
+      // Colored items are ordered per Yunus price category, so each item
+      // gets 3 separate quantity fields instead of one combined field.
       headerCells.push(el('th', {class:'color-th', html:'<span class="color-dot red"></span>Rouge / Rood'}));
       headerCells.push(el('th', {class:'color-th', html:'<span class="color-dot yellow"></span>Jaune / Geel'}));
       headerCells.push(el('th', {class:'color-th', html:'<span class="color-dot green"></span>Vert / Groen'}));
+    } else {
+      headerCells.push(el('th', {text:'Commandé / Besteld'}));
     }
     const thead = el('thead', {}, [el('tr', {}, headerCells)]);
     table.appendChild(thead);
@@ -337,16 +338,17 @@ function buildQtyTable(sectionKey, groups) {
       tdArt.appendChild(el('div', {class:'article-fr', text: item[0]}));
       tdArt.appendChild(el('div', {class:'article-nl', text: item[1]}));
       tr.appendChild(tdArt);
-      const tdQty = el('td');
-      const input = el('input', {type:'number', min:'0', id: id, 'data-fr': item[0], 'data-nl': item[1]});
-      tdQty.appendChild(input);
-      tr.appendChild(tdQty);
       if (showColors) {
         ['red', 'yellow', 'green'].forEach(color => {
           const tdColor = el('td', {class:'color-td'});
-          tdColor.appendChild(el('input', {type:'checkbox', id:`${id}__${color}`}));
+          tdColor.appendChild(el('input', {type:'number', min:'0', id:`${id}__${color}`, 'data-fr': item[0], 'data-nl': item[1]}));
           tr.appendChild(tdColor);
         });
+      } else {
+        const tdQty = el('td');
+        const input = el('input', {type:'number', min:'0', id: id, 'data-fr': item[0], 'data-nl': item[1]});
+        tdQty.appendChild(input);
+        tr.appendChild(tdQty);
       }
       tbody.appendChild(tr);
     });
@@ -391,7 +393,7 @@ function buildTextileCard(key, def) {
   const card = el('div', {class:'card', id:`card__${key}`});
   card.appendChild(el('h2', {text: def.label}));
   if (COLOR_CHECKBOX_SECTIONS.includes(key)) {
-    card.appendChild(el('div', {class:'legend', html: 'Rappel : cochez la/les catégorie(s) <span class="dot-red">rouge</span><span class="dot-yellow">jaune</span><span class="dot-green">vert</span> Yunus pour les vêtements &amp; manteaux commandés. / Vink de Yunus-categorie(ën) <span class="dot-red">rood</span><span class="dot-yellow">geel</span><span class="dot-green">groen</span> aan voor de bestelde kleding &amp; jassen.'}));
+    card.appendChild(el('div', {class:'legend', html: 'Rappel : indiquez la quantité commandée par catégorie <span class="dot-red">rouge</span><span class="dot-yellow">jaune</span><span class="dot-green">vert</span> Yunus pour les vêtements &amp; manteaux. / Geef het bestelde aantal per Yunus-categorie <span class="dot-red">rood</span><span class="dot-yellow">geel</span><span class="dot-green">groen</span> op voor kleding &amp; jassen.'}));
   }
   card.appendChild(buildQtyTable(key, def.groups));
   const remarksField = el('div', {class:'field'});
@@ -624,39 +626,48 @@ document.getElementById('btnReset').addEventListener('click', () => {
   }
 });
 
-// If an item has red/yellow/green Yunus-category checkboxes (CRÈME/MIDMIX
-// "Vêtements & manteaux" rows), returns e.g. "Rouge/Rood, Vert/Groen".
-// Returns null if the item has no color checkboxes at all.
-function colorLabelFor(id) {
+// If an item has red/yellow/green Yunus-category quantity fields
+// (CRÈME/MIDMIX "Vêtements & manteaux" rows), returns
+// {red, yellow, green} string values. Returns null if the item has no
+// color fields at all (i.e. it uses a single combined quantity field).
+function colorQtysFor(id) {
   const redEl = document.getElementById(`${id}__red`);
   if (!redEl) return null;
-  const parts = [];
-  if (redEl.checked) parts.push('Rouge/Rood');
   const yellowEl = document.getElementById(`${id}__yellow`);
-  if (yellowEl && yellowEl.checked) parts.push('Jaune/Geel');
   const greenEl = document.getElementById(`${id}__green`);
-  if (greenEl && greenEl.checked) parts.push('Vert/Groen');
-  return parts.join(', ');
+  return {
+    red: redEl.value || '',
+    yellow: yellowEl ? (yellowEl.value || '') : '',
+    green: greenEl ? (greenEl.value || '') : ''
+  };
 }
 
 function collectQtyRows(prefix, def) {
   const rows = [];
+  const isColorSection = COLOR_CHECKBOX_SECTIONS.includes(prefix);
+  function pushRow(id, item) {
+    const colors = colorQtysFor(id);
+    if (colors) {
+      if (colors.red || colors.yellow || colors.green) {
+        rows.push(isColorSection
+          ? [item[0], item[1], '', '', colors.red, colors.yellow, colors.green]
+          : [item[0], item[1], '', '']);
+      }
+    } else {
+      const v = document.getElementById(id);
+      const qty = v ? v.value : '';
+      if (qty) rows.push(isColorSection ? [item[0], item[1], qty, ''] : [item[0], item[1], qty, '']);
+    }
+  }
   if (def.groups) {
     def.groups.forEach((g, gi) => {
       g.items.forEach((item, ii) => {
-        const id = `${prefix}__g${gi}__i${ii}`;
-        const v = document.getElementById(id);
-        const qty = v ? v.value : '';
-        const colorLabel = colorLabelFor(id);
-        if (qty) rows.push(colorLabel === null ? [item[0], item[1], qty, ''] : [item[0], item[1], qty, '', colorLabel]);
+        pushRow(`${prefix}__g${gi}__i${ii}`, item);
       });
     });
   } else {
     def.items.forEach((item, ii) => {
-      const id = `${prefix}__i${ii}`;
-      const v = document.getElementById(id);
-      const qty = v ? v.value : '';
-      if (qty) rows.push([item[0], item[1], qty, '']);
+      pushRow(`${prefix}__i${ii}`, item);
     });
   }
   return rows;
@@ -713,7 +724,7 @@ function buildWorkbook() {
 
   function addQtySheet(sheetName, headerTitle, prefix, def) {
     const header = ['Article (FR)', 'Article (NL)', 'Commandé / Besteld', 'Livré / Geleverd (Yunus)'];
-    if (COLOR_CHECKBOX_SECTIONS.includes(prefix)) header.push('Catégorie Yunus / Yunus-categorie');
+    if (COLOR_CHECKBOX_SECTIONS.includes(prefix)) header.push('Rouge / Rood', 'Jaune / Geel', 'Vert / Groen');
     const rows = [[headerTitle], [], header];
     collectQtyRows(prefix, def).forEach(r => rows.push(r));
     const remarksEl = document.getElementById(`${prefix}__remarques`);
@@ -782,22 +793,28 @@ function collectAllLineItems() {
   const lines = [];
 
   function pushFromDef(prefix, def, categoryLabel) {
+    function pushItem(id, item) {
+      const colors = colorQtysFor(id);
+      if (colors) {
+        [['red', 'Rouge/Rood'], ['yellow', 'Jaune/Geel'], ['green', 'Vert/Groen']].forEach(([key, label]) => {
+          const qty = parseFloat(colors[key]);
+          if (qty) lines.push({ category: categoryLabel, article_fr: `${item[0]} [${label}]`, article_nl: item[1], quantity: qty });
+        });
+      } else {
+        const el = document.getElementById(id);
+        const qty = el ? parseFloat(el.value) : NaN;
+        if (qty) lines.push({ category: categoryLabel, article_fr: item[0], article_nl: item[1], quantity: qty });
+      }
+    }
     if (def.groups) {
       def.groups.forEach((g, gi) => {
         g.items.forEach((item, ii) => {
-          const id = `${prefix}__g${gi}__i${ii}`;
-          const el = document.getElementById(id);
-          const qty = el ? parseFloat(el.value) : NaN;
-          const colorLabel = colorLabelFor(id);
-          const articleFr = colorLabel ? `${item[0]} [${colorLabel}]` : item[0];
-          if (qty) lines.push({ category: categoryLabel, article_fr: articleFr, article_nl: item[1], quantity: qty });
+          pushItem(`${prefix}__g${gi}__i${ii}`, item);
         });
       });
     } else {
       def.items.forEach((item, ii) => {
-        const el = document.getElementById(`${prefix}__i${ii}`);
-        const qty = el ? parseFloat(el.value) : NaN;
-        if (qty) lines.push({ category: categoryLabel, article_fr: item[0], article_nl: item[1], quantity: qty });
+        pushItem(`${prefix}__i${ii}`, item);
       });
     }
   }
