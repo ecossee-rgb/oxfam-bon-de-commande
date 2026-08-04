@@ -415,6 +415,9 @@ function deviceRow(prefix, idx, fields) {
         const label = (o && typeof o === 'object') ? o.label : o;
         sel.appendChild(el('option', {value: val, text: label}));
       });
+      if (f.key === 'modele' && (prefix === 'laptop' || prefix === 'desktop')) {
+        sel.addEventListener('change', () => updateOsOptionsForRow(prefix, idx));
+      }
       td.appendChild(sel);
     } else if (f.type === 'number') {
       td.appendChild(el('input', {type:'number', min:'0', id:`${prefix}__${f.key}__${idx}`}));
@@ -449,6 +452,8 @@ function buildDeviceTable(prefix, columns, rowCount) {
 // Informatique section instead of free-text brand/model/spec fields.
 const ODOO_STOCK_URL = 'https://ubqshzvbsqfekziyqxyc.supabase.co/functions/v1/odoo-stock';
 const odooStockOptions = { laptop: [], desktop: [], display: [], accessoire: [], misc: [], printer: [], projector: [], smartphone: [], tablet: [] };
+// model name -> osGroup ('win10'|'win11'|'mac'|null), populated for laptop/desktop only.
+const odooStockMeta = { laptop: {}, desktop: {} };
 const odooStockRawCache = {};
 const odooStockLoaded = {};
 
@@ -468,10 +473,14 @@ function ensureOdooStockLoaded(category) {
   if (!odooStockLoaded[category]) {
     odooStockLoaded[category] = fetchOdooStockRaw(category).then(items => {
       odooStockOptions[category].length = 0;
-      items.forEach(it => odooStockOptions[category].push({
-        value: it.name,
-        label: `${it.name} (${it.qty} en stock / op voorraad)`
-      }));
+      if (odooStockMeta[category]) odooStockMeta[category] = {};
+      items.forEach(it => {
+        odooStockOptions[category].push({
+          value: it.name,
+          label: `${it.name} (${it.qty} en stock / op voorraad)`
+        });
+        if (odooStockMeta[category]) odooStockMeta[category][it.name] = it.osGroup || null;
+      });
     });
   }
   return odooStockLoaded[category];
@@ -484,7 +493,37 @@ function refreshModeleSelects(prefix) {
     sel.appendChild(el('option', {value:'', text:'--'}));
     odooStockOptions[prefix].forEach(o => sel.appendChild(el('option', {value:o.value, text:o.label})));
     if (current) sel.value = current;
+    if (odooStockMeta[prefix]) {
+      const idx = sel.id.slice(`${prefix}__modele__`.length);
+      updateOsOptionsForRow(prefix, idx);
+    }
   });
+}
+
+// A laptop/desktop's OS choice must be coherent with what that model
+// actually supports in Odoo: Windows 10 + Linux, Windows 11 + Linux, or
+// MacOS only (Apple products). If Odoo has no OS attribute for a model
+// (data isn't filled in for every product), fall back to the full list
+// so the field never blocks an order.
+const OS_GROUP_OPTIONS = {
+  win10: ['Windows 10', 'Linux'],
+  win11: ['Windows 11', 'Linux'],
+  mac: ['MacOS']
+};
+const OS_DEFAULT_OPTIONS = ['Windows 10', 'Windows 11', 'Linux'];
+
+function updateOsOptionsForRow(prefix, idx) {
+  const osSel = document.getElementById(`${prefix}__os__${idx}`);
+  if (!osSel) return;
+  const modeleSel = document.getElementById(`${prefix}__modele__${idx}`);
+  const modelName = modeleSel ? modeleSel.value : '';
+  const group = (modelName && odooStockMeta[prefix]) ? odooStockMeta[prefix][modelName] : null;
+  const options = OS_GROUP_OPTIONS[group] || OS_DEFAULT_OPTIONS;
+  const current = osSel.value;
+  osSel.innerHTML = '';
+  osSel.appendChild(el('option', {value:'', text:'--'}));
+  options.forEach(o => osSel.appendChild(el('option', {value:o, text:o})));
+  if (current && options.includes(current)) osSel.value = current;
 }
 
 function remarqueCol() {
@@ -502,7 +541,7 @@ const INFO_CATEGORIES = [
     ]) },
   { prefix:'desktop', title:'Desktops', addLabel:'+ Ajouter une ligne desktop / Desktoprij toevoegen',
     extraColumns: () => ([
-      {key:'windows', label:'Windows', type:'select', options:['10','11']}
+      {key:'os', label:'OS', type:'select', options: DATA.osOptions}
     ]) },
   { prefix:'display', title:'Displays', addLabel:'+ Ajouter une ligne display / Displayrij toevoegen', extraColumns: remarqueCol },
   { prefix:'accessoire', title:'Accessoires', addLabel:'+ Ajouter une ligne accessoire / Accessoirerij toevoegen', extraColumns: remarqueCol },
@@ -517,7 +556,7 @@ INFO_CATEGORIES.forEach(cat => {
 });
 
 // French labels used for the Excel export headers (key -> header text).
-const INFO_COLUMN_LABELS_FR = { modele:'Modèle', os:'OS', clavier:'Clavier', windows:'Windows', remarque:'Remarque', commande:'Commandé' };
+const INFO_COLUMN_LABELS_FR = { modele:'Modèle', os:'OS', clavier:'Clavier', remarque:'Remarque', commande:'Commandé' };
 
 function infoColumns(cat) {
   return [{key:'modele', label:'Modèle / Model', type:'select', options: odooStockOptions[cat.prefix]}]
@@ -888,6 +927,24 @@ async function applyFormSnapshot(snapshot) {
     const val = snapshot.radioGroups[name];
     document.querySelectorAll(`input[type="radio"][name="${name}"]`).forEach(r => {
       r.checked = (r.value === val);
+    });
+  });
+
+  // The OS select's options depend on the chosen model (see
+  // updateOsOptionsForRow), and setting .value above doesn't fire a
+  // 'change' event, so re-narrow each laptop/desktop row's OS options now
+  // and re-apply the saved OS value (narrowing rebuilds the <select>).
+  ['laptop', 'desktop'].forEach(prefix => {
+    const tbody = document.getElementById(`${prefix}__tbody`);
+    if (!tbody) return;
+    Array.from(tbody.children).forEach(tr => {
+      const idx = tr.getAttribute('data-idx');
+      updateOsOptionsForRow(prefix, idx);
+      const osId = `${prefix}__os__${idx}`;
+      if (snapshot.fields && snapshot.fields[osId] !== undefined) {
+        const osSel = document.getElementById(osId);
+        if (osSel) osSel.value = snapshot.fields[osId];
+      }
     });
   });
 }
