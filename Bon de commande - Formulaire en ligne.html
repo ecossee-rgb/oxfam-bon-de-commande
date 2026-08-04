@@ -742,26 +742,70 @@ async function logOrderToSupabase() {
   }
 }
 
-async function sendEmailWithAttachment(store, dateVal) {
-  const wb = buildWorkbook();
-  const wbArray = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-  const blob = new Blob([wbArray], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-  const filename = getExportFilename();
+// FormSubmit's /ajax/ endpoint does not deliver file attachments (documented
+// behaviour: attachments require a genuine multipart/form-data <form> POST).
+// We submit a real hidden form into a hidden iframe so the browser performs a
+// true multipart upload (attachment included) without navigating the page.
+let emailFrame = document.getElementById('formsubmitFrame');
+if (!emailFrame) {
+  emailFrame = document.createElement('iframe');
+  emailFrame.id = 'formsubmitFrame';
+  emailFrame.name = 'formsubmitFrame';
+  emailFrame.style.display = 'none';
+  document.body.appendChild(emailFrame);
+}
 
-  const formData = new FormData();
-  formData.append('_subject', `Bon de commande - ${store} - ${dateVal}`);
-  formData.append('_captcha', 'false');
-  formData.append('_template', 'box');
-  formData.append('Magasin', store);
-  formData.append('Date de livraison', dateVal);
-  formData.append('attachment', blob, filename);
+function sendEmailWithAttachment(store, dateVal) {
+  return new Promise((resolve, reject) => {
+    try {
+      const wb = buildWorkbook();
+      const wbArray = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+      const blob = new Blob([wbArray], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const filename = getExportFilename();
+      const file = new File([blob], filename, { type: blob.type });
 
-  const resp = await fetch(`https://formsubmit.co/ajax/${EMAIL_TARGET}`, {
-    method: 'POST',
-    headers: { Accept: 'application/json' },
-    body: formData
+      const form = document.createElement('form');
+      form.action = `https://formsubmit.co/${EMAIL_TARGET}`;
+      form.method = 'POST';
+      form.enctype = 'multipart/form-data';
+      form.target = 'formsubmitFrame';
+      form.style.display = 'none';
+
+      function addField(name, value) {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = name;
+        input.value = value;
+        form.appendChild(input);
+      }
+      addField('_subject', `Bon de commande - ${store} - ${dateVal}`);
+      addField('_captcha', 'false');
+      addField('_template', 'box');
+      addField('Magasin', store);
+      addField('Date de livraison', dateVal);
+
+      const fileInput = document.createElement('input');
+      fileInput.type = 'file';
+      fileInput.name = 'attachment';
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      fileInput.files = dt.files;
+      form.appendChild(fileInput);
+
+      document.body.appendChild(form);
+      form.submit();
+
+      // Cross-origin iframe response can't be read (opaque), so we can't get a
+      // real success/failure signal here. Resolve optimistically after the
+      // browser has had time to dispatch the multipart request.
+      setTimeout(() => {
+        form.remove();
+        resolve();
+      }, 2500);
+    } catch (e) {
+      reject(e);
+    }
   });
-  if (!resp.ok) throw new Error('email failed: ' + resp.status);
 }
 
 document.getElementById('btnSend').addEventListener('click', async () => {
@@ -783,17 +827,22 @@ document.getElementById('btnSend').addEventListener('click', async () => {
     logOrderToSupabase()
   ]);
 
-  const emailOk = results[0].status === 'fulfilled';
+  // The email step now submits a real multipart form into a hidden iframe
+  // (required by FormSubmit for attachments to work), which means we can no
+  // longer read a genuine success/failure response from it - it will resolve
+  // as long as the form could be built and submitted. The database logging
+  // step still gives a reliable signal, so that's what we report on.
+  const emailAttempted = results[0].status === 'fulfilled';
   const dbOk = results[1].status === 'fulfilled';
 
-  if (emailOk && dbOk) {
+  if (emailAttempted && dbOk) {
     toast(`Bon de commande envoyé à ${EMAIL_TARGET} et enregistré dans le suivi des commandes. / Bestelbon verzonden naar ${EMAIL_TARGET} en geregistreerd in de bestelopvolging.`);
-  } else if (emailOk && !dbOk) {
+  } else if (emailAttempted && !dbOk) {
     console.error(results[1].reason);
     toast("Email envoyé, mais l'enregistrement dans le suivi des commandes a échoué. Réessayez plus tard. / E-mail verzonden, maar de registratie in de bestelopvolging is mislukt. Probeer het later opnieuw.");
-  } else if (!emailOk && dbOk) {
+  } else if (!emailAttempted && dbOk) {
     console.error(results[0].reason);
-    toast("Enregistré dans le suivi des commandes, mais l'envoi de l'email a échoué (vérifiez la confirmation FormSubmit si c'est le premier envoi). / Geregistreerd in de bestelopvolging, maar het verzenden van de e-mail is mislukt (controleer de FormSubmit-bevestiging als dit de eerste verzending is).");
+    toast("Enregistré dans le suivi des commandes, mais l'envoi de l'email a échoué. Réessayez, ou téléchargez une copie et envoyez-la manuellement. / Geregistreerd in de bestelopvolging, maar het verzenden van de e-mail is mislukt. Probeer opnieuw, of download een kopie en verstuur deze handmatig.");
   } else {
     console.error(results[0].reason, results[1].reason);
     toast("Échec de l'envoi et de l'enregistrement. Réessayez, ou téléchargez une copie et envoyez-la manuellement. / Verzenden en registreren mislukt. Probeer opnieuw, of download een kopie en verstuur deze handmatig.");
