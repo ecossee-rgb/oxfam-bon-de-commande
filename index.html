@@ -803,6 +803,52 @@ function getExportFilename() {
   return `Bon_de_commande_${safeStore}_${dateVal}.xlsx`;
 }
 
+function getInformatiqueExportFilename() {
+  return getExportFilename().replace(/\.xlsx$/, '_Informatique.xlsx');
+}
+
+// True only when the current store shows the Informatique tab AND at least
+// one Informatique row has a non-zero "Commandé" quantity.
+function hasInformatiqueLines() {
+  const store = storeSelect.value;
+  const flags = DATA.stores[store] || {};
+  if (!flags.informatique) return false;
+  return INFO_CATEGORIES.some(cat => {
+    const cols = infoColumns(cat);
+    const qtyIdx = cols.findIndex(c => c.key === 'commande');
+    return collectDeviceRows(cat.prefix, cols).some(r => parseFloat(r[qtyIdx]) > 0);
+  });
+}
+
+// Same "Résumé" + "Informatique" sheets as the full export, but nothing
+// else - this is what gets attached to the extra email sent to
+// INFO_EMAIL_TARGET so that recipient only ever sees informatique items.
+function buildInformatiqueWorkbook() {
+  const store = storeSelect.value || '(non renseigné)';
+  const date = document.getElementById('deliveryDate').value || '(non renseignée)';
+  const wb = XLSX.utils.book_new();
+
+  const resumeRows = [
+    ['BON DE COMMANDE - EXTRAIT INFORMATIQUE'],
+    [],
+    ['Magasin / Winkel', store],
+    ['Date de livraison / Leveringsdatum', date]
+  ];
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(resumeRows), 'Résumé');
+
+  const rows = [['INFORMATIQUE / INFORMATICA'], []];
+  INFO_CATEGORIES.forEach((cat, i) => {
+    const cols = infoColumns(cat);
+    if (i > 0) rows.push([]);
+    rows.push([cat.title.toUpperCase()]);
+    rows.push(cols.map(c => INFO_COLUMN_LABELS_FR[c.key] || c.label));
+    collectDeviceRows(cat.prefix, cols).forEach(r => rows.push(r));
+  });
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), 'Informatique');
+
+  return wb;
+}
+
 document.getElementById('btnExport').addEventListener('click', () => {
   const store = storeSelect.value;
   if (!store) { toast("Merci de choisir votre magasin avant d'exporter. / Gelieve uw winkel te kiezen voordat u exporteert."); return; }
@@ -821,6 +867,10 @@ document.getElementById('btnExport').addEventListener('click', () => {
 });
 
 const EMAIL_TARGET = 'emmanuel.cossee@oxfam.org';
+// Separate recipient for the "Informatique" line items only, sent as an
+// additional email alongside (not instead of) the full order above. Only
+// fires when the store's order actually has informatique quantities > 0.
+const INFO_EMAIL_TARGET = 'support.atelier@oxfam.org';
 const EDIT_PASSCODE = 'oxfam2026';
 
 const SUPABASE_URL = 'https://ubqshzvbsqfekziyqxyc.supabase.co';
@@ -1037,29 +1087,37 @@ async function logOrderToSupabase() {
 // behaviour: attachments require a genuine multipart/form-data <form> POST).
 // We submit a real hidden form into a hidden iframe so the browser performs a
 // true multipart upload (attachment included) without navigating the page.
-let emailFrame = document.getElementById('formsubmitFrame');
-if (!emailFrame) {
-  emailFrame = document.createElement('iframe');
-  emailFrame.id = 'formsubmitFrame';
-  emailFrame.name = 'formsubmitFrame';
-  emailFrame.style.display = 'none';
-  document.body.appendChild(emailFrame);
-}
+//
+// sendEmailWithAttachment can now target any recipient with any workbook, so
+// the same function sends both the full order (to EMAIL_TARGET) and, when
+// applicable, the informatique-only extract (to INFO_EMAIL_TARGET). Each
+// call gets its own throwaway iframe/name so two sends fired at the same
+// time (Promise.allSettled) don't cancel each other's navigation.
+function sendEmailWithAttachment(store, dateVal, opts) {
+  opts = opts || {};
+  const target = opts.target || EMAIL_TARGET;
+  const buildWb = opts.buildWorkbook || buildWorkbook;
+  const filename = opts.filename || getExportFilename();
+  const subject = opts.subject || `Bon de commande - ${store} - ${dateVal}`;
 
-function sendEmailWithAttachment(store, dateVal) {
   return new Promise((resolve, reject) => {
     try {
-      const wb = buildWorkbook();
+      const wb = buildWb();
       const wbArray = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
       const blob = new Blob([wbArray], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-      const filename = getExportFilename();
       const file = new File([blob], filename, { type: blob.type });
 
+      const frameName = `formsubmitFrame_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+      const frame = document.createElement('iframe');
+      frame.name = frameName;
+      frame.style.display = 'none';
+      document.body.appendChild(frame);
+
       const form = document.createElement('form');
-      form.action = `https://formsubmit.co/${EMAIL_TARGET}`;
+      form.action = `https://formsubmit.co/${target}`;
       form.method = 'POST';
       form.enctype = 'multipart/form-data';
-      form.target = 'formsubmitFrame';
+      form.target = frameName;
       form.style.display = 'none';
 
       function addField(name, value) {
@@ -1069,7 +1127,7 @@ function sendEmailWithAttachment(store, dateVal) {
         input.value = value;
         form.appendChild(input);
       }
-      addField('_subject', `Bon de commande - ${store} - ${dateVal}`);
+      addField('_subject', subject);
       addField('_captcha', 'false');
       addField('_template', 'box');
       addField('Magasin', store);
@@ -1091,6 +1149,7 @@ function sendEmailWithAttachment(store, dateVal) {
       // browser has had time to dispatch the multipart request.
       setTimeout(() => {
         form.remove();
+        frame.remove();
         resolve();
       }, 2500);
     } catch (e) {
@@ -1142,10 +1201,25 @@ document.getElementById('btnSend').addEventListener('click', async () => {
     return;
   }
 
-  const results = await Promise.allSettled([
+  // If this order has informatique quantities, also send a second email
+  // with only those items to INFO_EMAIL_TARGET, alongside (not instead of)
+  // the full order sent to EMAIL_TARGET below.
+  const sendInfoEmail = hasInformatiqueLines();
+
+  const sendPromises = [
     sendEmailWithAttachment(store, dateVal),
     logOrderToSupabase()
-  ]);
+  ];
+  if (sendInfoEmail) {
+    sendPromises.push(sendEmailWithAttachment(store, dateVal, {
+      target: INFO_EMAIL_TARGET,
+      buildWorkbook: buildInformatiqueWorkbook,
+      filename: getInformatiqueExportFilename(),
+      subject: `Commande Informatique - ${store} - ${dateVal}`
+    }));
+  }
+
+  const results = await Promise.allSettled(sendPromises);
 
   // The email step now submits a real multipart form into a hidden iframe
   // (required by FormSubmit for attachments to work), which means we can no
@@ -1154,18 +1228,28 @@ document.getElementById('btnSend').addEventListener('click', async () => {
   // step still gives a reliable signal, so that's what we report on.
   const emailAttempted = results[0].status === 'fulfilled';
   const dbOk = results[1].status === 'fulfilled';
+  const infoEmailAttempted = sendInfoEmail ? results[2].status === 'fulfilled' : null;
+
+  function infoSuffix() {
+    if (infoEmailAttempted === null) return '';
+    return infoEmailAttempted
+      ? ` L'extrait informatique a aussi été envoyé à ${INFO_EMAIL_TARGET}. / Het informatica-uittreksel werd ook verzonden naar ${INFO_EMAIL_TARGET}.`
+      : ` Échec de l'envoi de l'extrait informatique à ${INFO_EMAIL_TARGET}. / Verzenden van het informatica-uittreksel naar ${INFO_EMAIL_TARGET} is mislukt.`;
+  }
 
   if (emailAttempted && dbOk) {
-    toast(`Bon de commande envoyé à ${EMAIL_TARGET} et enregistré dans le suivi des commandes. / Bestelbon verzonden naar ${EMAIL_TARGET} en geregistreerd in de bestelopvolging.`);
+    if (sendInfoEmail && !infoEmailAttempted) console.error(results[2].reason);
+    toast(`Bon de commande envoyé à ${EMAIL_TARGET} et enregistré dans le suivi des commandes. / Bestelbon verzonden naar ${EMAIL_TARGET} en geregistreerd in de bestelopvolging.` + infoSuffix());
   } else if (emailAttempted && !dbOk) {
     console.error(results[1].reason);
-    toast("Email envoyé, mais l'enregistrement dans le suivi des commandes a échoué. Réessayez plus tard. / E-mail verzonden, maar de registratie in de bestelopvolging is mislukt. Probeer het later opnieuw.");
+    if (sendInfoEmail && !infoEmailAttempted) console.error(results[2].reason);
+    toast("Email envoyé, mais l'enregistrement dans le suivi des commandes a échoué. Réessayez plus tard. / E-mail verzonden, maar de registratie in de bestelopvolging is mislukt. Probeer het later opnieuw." + infoSuffix());
   } else if (!emailAttempted && dbOk) {
     console.error(results[0].reason);
-    toast("Enregistré dans le suivi des commandes, mais l'envoi de l'email a échoué. Réessayez, ou téléchargez une copie et envoyez-la manuellement. / Geregistreerd in de bestelopvolging, maar het verzenden van de e-mail is mislukt. Probeer opnieuw, of download een kopie en verstuur deze handmatig.");
+    toast("Enregistré dans le suivi des commandes, mais l'envoi de l'email a échoué. Réessayez, ou téléchargez une copie et envoyez-la manuellement. / Geregistreerd in de bestelopvolging, maar het verzenden van de e-mail is mislukt. Probeer opnieuw, of download een kopie en verstuur deze handmatig." + infoSuffix());
   } else {
     console.error(results[0].reason, results[1].reason);
-    toast("Échec de l'envoi et de l'enregistrement. Réessayez, ou téléchargez une copie et envoyez-la manuellement. / Verzenden en registreren mislukt. Probeer opnieuw, of download een kopie en verstuur deze handmatig.");
+    toast("Échec de l'envoi et de l'enregistrement. Réessayez, ou téléchargez une copie et envoyez-la manuellement. / Verzenden en registreren mislukt. Probeer opnieuw, of download een kopie en verstuur deze handmatig." + infoSuffix());
   }
 
   sendBtn.disabled = false;
