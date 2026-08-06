@@ -924,7 +924,14 @@ const SHOP_EMAILS = {
 // else (mapping, send call, toast wording) is fully wired up regardless.
 const SHOP_COPY_ENABLED = false;
 
-const EDIT_PASSCODE = 'oxfam2026';
+// The edit passcode used to be checked here client-side (a hardcoded
+// EDIT_PASSCODE constant), which GitGuardian correctly flagged as a leaked
+// secret - anyone could read it straight out of the page source, and worse,
+// the anon Supabase key could UPDATE orders / DELETE order_lines directly,
+// so the prompt was purely cosmetic. The check now happens server-side in
+// the `edit-order` Supabase Edge Function (see logOrderToSupabase below),
+// and RLS no longer grants the anon role UPDATE on orders or DELETE on
+// order_lines, so this is the only path that can save an edit.
 
 const SUPABASE_URL = 'https://ubqshzvbsqfekziyqxyc.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_jfEushP76J1NqW9LHeEb5A_8xNHAvba';
@@ -1052,7 +1059,7 @@ async function applyFormSnapshot(snapshot) {
   });
 }
 
-async function logOrderToSupabase() {
+async function logOrderToSupabase(editPasscode) {
   const store = storeSelect.value;
   const dateVal = document.getElementById('deliveryDate').value;
   const radioVal = (name) => {
@@ -1079,47 +1086,46 @@ async function logOrderToSupabase() {
     form_snapshot: collectFormSnapshot()
   };
 
-  let orderId;
-  if (editOrderId) {
-    const updateResp = await fetch(`${SUPABASE_URL}/rest/v1/orders?id=eq.${editOrderId}`, {
-      method: 'PATCH',
-      headers: {
-        apikey: SUPABASE_KEY,
-        Authorization: `Bearer ${SUPABASE_KEY}`,
-        'Content-Type': 'application/json',
-        Prefer: 'return=representation'
-      },
-      body: JSON.stringify(orderPayload)
-    });
-    if (!updateResp.ok) throw new Error('order update failed: ' + updateResp.status);
-    orderId = editOrderId;
+  const lines = collectAllLineItems();
 
-    // Replace existing line items with the freshly edited set.
-    const deleteResp = await fetch(`${SUPABASE_URL}/rest/v1/order_lines?order_id=eq.${editOrderId}`, {
-      method: 'DELETE',
-      headers: {
-        apikey: SUPABASE_KEY,
-        Authorization: `Bearer ${SUPABASE_KEY}`
-      }
-    });
-    if (!deleteResp.ok) throw new Error('lines delete failed: ' + deleteResp.status);
-  } else {
-    const orderResp = await fetch(`${SUPABASE_URL}/rest/v1/orders`, {
+  if (editOrderId) {
+    // Edits are applied by the edit-order Edge Function, which checks the
+    // passcode server-side (it never reaches the browser) and, if correct,
+    // writes with the service_role key. RLS denies the anon key UPDATE on
+    // orders and DELETE on order_lines, so this is the only way to save an
+    // edit - throwing 'WRONG_PASSCODE' lets the caller show the right toast.
+    const resp = await fetch(`${SUPABASE_URL}/functions/v1/edit-order`, {
       method: 'POST',
       headers: {
         apikey: SUPABASE_KEY,
         Authorization: `Bearer ${SUPABASE_KEY}`,
-        'Content-Type': 'application/json',
-        Prefer: 'return=representation'
+        'Content-Type': 'application/json'
       },
-      body: JSON.stringify(orderPayload)
+      body: JSON.stringify({ orderId: editOrderId, passcode: editPasscode, order: orderPayload, lines })
     });
-    if (!orderResp.ok) throw new Error('order insert failed: ' + orderResp.status);
-    const orderRows = await orderResp.json();
-    orderId = orderRows[0].id;
+    let result = {};
+    try { result = await resp.json(); } catch (e) { /* ignore unparsable body */ }
+    if (!resp.ok) {
+      if (resp.status === 401) throw new Error('WRONG_PASSCODE');
+      throw new Error(result.error || ('edit-order failed: ' + resp.status));
+    }
+    return;
   }
 
-  const lines = collectAllLineItems();
+  const orderResp = await fetch(`${SUPABASE_URL}/rest/v1/orders`, {
+    method: 'POST',
+    headers: {
+      apikey: SUPABASE_KEY,
+      Authorization: `Bearer ${SUPABASE_KEY}`,
+      'Content-Type': 'application/json',
+      Prefer: 'return=representation'
+    },
+    body: JSON.stringify(orderPayload)
+  });
+  if (!orderResp.ok) throw new Error('order insert failed: ' + orderResp.status);
+  const orderRows = await orderResp.json();
+  const orderId = orderRows[0].id;
+
   if (lines.length) {
     const linesPayload = lines.map(l => Object.assign({ order_id: orderId }, l));
     const linesResp = await fetch(`${SUPABASE_URL}/rest/v1/order_lines`, {
@@ -1226,14 +1232,12 @@ document.getElementById('btnSend').addEventListener('click', async () => {
   }
 
   const isEditMode = !!window.__editOrderId;
+  let editPasscode = null;
 
   if (isEditMode) {
     const entered = window.prompt('Code de modification requis / Wijzigingscode vereist:');
     if (entered === null) return; // cancelled
-    if (entered !== EDIT_PASSCODE) {
-      toast('Code incorrect. Modifications non enregistrées. / Onjuiste code. Wijzigingen niet opgeslagen.');
-      return;
-    }
+    editPasscode = entered;
   }
 
   const sendBtn = document.getElementById('btnSend');
@@ -1242,13 +1246,18 @@ document.getElementById('btnSend').addEventListener('click', async () => {
 
   if (isEditMode) {
     // Editing an existing order only updates the tracked record - it does not
-    // resend the email, to avoid spamming the recipient on every edit.
+    // resend the email, to avoid spamming the recipient on every edit. The
+    // passcode is verified server-side by the edit-order Edge Function.
     try {
-      await logOrderToSupabase();
+      await logOrderToSupabase(editPasscode);
       toast('Modifications enregistrées dans le suivi des commandes. / Wijzigingen opgeslagen in de bestelopvolging.');
     } catch (e) {
       console.error(e);
-      toast("Échec de l'enregistrement des modifications. Réessayez plus tard. / Opslaan van de wijzigingen is mislukt. Probeer het later opnieuw.");
+      if (e.message === 'WRONG_PASSCODE') {
+        toast('Code incorrect. Modifications non enregistrées. / Onjuiste code. Wijzigingen niet opgeslagen.');
+      } else {
+        toast("Échec de l'enregistrement des modifications. Réessayez plus tard. / Opslaan van de wijzigingen is mislukt. Probeer het later opnieuw.");
+      }
     }
     sendBtn.disabled = false;
     return;
