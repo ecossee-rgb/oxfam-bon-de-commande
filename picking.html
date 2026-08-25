@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Préparation de commande - Bestelling klaarmaken | Oxfam Magasins du monde</title>
+<style>
+  :root {
+    --oxfam-green: #00693e;
+    --oxfam-dark: #00351f;
+    --bg: #f4f6f5;
+    --border: #d7ded9;
+    --diff-bg: #fff3cd;
+    --diff-border: #f0c674;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    background: var(--bg);
+    margin: 0;
+    padding: 0;
+    color: #1a1a1a;
+  }
+  header {
+    background: var(--oxfam-green);
+    color: white;
+    padding: 20px 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  header h1 { margin: 0; font-size: 22px; }
+  header p { margin: 4px 0 0; font-size: 13px; opacity: 0.9; }
+  header a.back-link { color: white; font-size: 13px; opacity: 0.9; }
+  .wrap { max-width: 900px; margin: 0 auto; padding: 20px 16px 100px; }
+  .card {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 20px;
+    margin-bottom: 16px;
+  }
+  .card h2 {
+    font-size: 16px;
+    margin: 0 0 12px;
+    color: var(--oxfam-dark);
+    border-bottom: 2px solid var(--oxfam-green);
+    padding-bottom: 6px;
+  }
+  .order-summary { font-size: 13px; color: #333; }
+  .order-summary strong { color: var(--oxfam-dark); }
+  .banner {
+    background: #eef5f1; border: 1px solid #cfe4d8; color: var(--oxfam-dark);
+    border-radius: 8px; padding: 10px 14px; margin-bottom: 16px; font-size: 13px;
+  }
+  .group-title {
+    background: #eef5f1; padding: 6px 10px; font-weight: 600; font-size: 13px;
+    color: var(--oxfam-dark); border-radius: 6px; margin: 14px 0 6px;
+  }
+  table.items { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 6px; }
+  table.items th {
+    text-align: left; font-size: 11px; text-transform: uppercase; color: #666;
+    padding: 6px 8px; border-bottom: 2px solid var(--border);
+  }
+  table.items td { padding: 5px 8px; border-bottom: 1px solid #eee; vertical-align: middle; }
+  table.items td.article-fr { font-weight: 500; }
+  table.items td.article-nl { color: #666; font-style: italic; font-size: 12px; }
+  table.items th.num, table.items td.num { text-align: center; width: 110px; }
+  table.items input[type=number] { width: 80px; padding: 6px 8px; border: 1px solid #c7cfca; border-radius: 6px; font-size: 14px; text-align: center; }
+  tr.diff-row { background: var(--diff-bg); }
+  tr.diff-row td.num input { border-color: var(--diff-border); }
+  .field { margin-bottom: 12px; }
+  label { font-size: 13px; font-weight: 600; display: block; margin-bottom: 4px; color: #333; }
+  input[type=text] { width: 100%; max-width: 320px; padding: 8px 10px; border: 1px solid #c7cfca; border-radius: 6px; font-size: 14px; font-family: inherit; }
+  .actions { position: sticky; bottom: 0; background: white; border-top: 1px solid var(--border); padding: 14px 20px; display: flex; gap: 10px; justify-content: flex-end; max-width: 900px; margin: 0 auto; }
+  .btn { padding: 10px 18px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; border: none; }
+  .btn-primary { background: var(--oxfam-green); color: white; }
+  .btn-primary:disabled { background: #9db8ac; cursor: not-allowed; }
+  #toast { position: fixed; top: 16px; right: 16px; background: var(--oxfam-dark); color: white; padding: 10px 16px; border-radius: 8px; font-size: 13px; display: none; z-index: 999; max-width: 340px; }
+  .placeholder-msg { color: #888; font-size: 13px; font-style: italic; }
+  .legend { font-size: 12px; color: #666; margin: -4px 0 14px; }
+  .legend .dot { display: inline-block; width: 10px; height: 10px; border-radius: 2px; background: var(--diff-bg); border: 1px solid var(--diff-border); vertical-align: middle; margin-right: 4px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div style="display:flex; align-items:center; gap:16px;">
+    <img src="./logo-oxfam.png" alt="Oxfam" style="height:56px; width:auto; background:white; border-radius:8px; padding:4px;">
+    <div>
+      <h1>Préparation de commande - Bestelling klaarmaken</h1>
+      <p>Indiquez la quantité réellement prélevée pour chaque article. / Geef voor elk artikel de werkelijk opgehaalde hoeveelheid op.</p>
+    </div>
+  </div>
+  <a class="back-link" href="./dashboard.html">&larr; Retour au suivi / Terug naar de opvolging</a>
+</header>
+
+<div class="wrap">
+
+  <div id="loadingMsg" class="card"><p class="placeholder-msg">Chargement de la commande... / Bestelling laden...</p></div>
+
+  <div id="content" style="display:none;">
+
+    <div class="card">
+      <h2>Commande / Bestelling</h2>
+      <div class="order-summary" id="orderSummary"></div>
+    </div>
+
+    <div id="alreadyPickedBanner" class="banner" style="display:none;"></div>
+
+    <p class="legend"><span class="dot"></span>Une ligne surlignée signale un écart entre la quantité command&eacute;e et la quantit&eacute; pr&eacute;lev&eacute;e. / Een gemarkeerde regel toont een verschil tussen de bestelde en de opgehaalde hoeveelheid.</p>
+
+    <div id="lineSections"></div>
+
+    <div class="card">
+      <div class="field">
+        <label>Pr&eacute;par&eacute; par / Voorbereid door <span style="color:#c0392b">*</span></label>
+        <input type="text" id="pickedByInput" placeholder="Votre nom / Uw naam">
+      </div>
+    </div>
+
+  </div>
+
+  <div id="noOrderMsg" class="card" style="display:none;">
+    <p class="placeholder-msg">Aucune commande sp&eacute;cifi&eacute;e. Ouvrez cette page depuis le lien "Pr&eacute;parer" du suivi des commandes. / Geen bestelling opgegeven. Open deze pagina via de link "Klaarmaken" in de bestelopvolging.</p>
+  </div>
+
+</div>
+
+<div id="toast"></div>
+
+<div class="actions" id="actionsBar" style="display:none;">
+  <button class="btn btn-primary" id="btnSubmit">Valider la pr&eacute;paration / Klaarmaken bevestigen</button>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://ubqshzvbsqfekziyqxyc.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_jfEushP76J1NqW9LHeEb5A_8xNHAvba';
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.display = 'block';
+  setTimeout(() => t.style.display = 'none', 6000);
+}
+
+function el(tag, attrs, children) {
+  const e = document.createElement(tag);
+  if (attrs) Object.keys(attrs).forEach(k => {
+    if (k === 'text') e.textContent = attrs[k];
+    else if (k === 'html') e.innerHTML = attrs[k];
+    else e.setAttribute(k, attrs[k]);
+  });
+  (children || []).forEach(c => e.appendChild(c));
+  return e;
+}
+
+const params = new URLSearchParams(window.location.search);
+const orderId = params.get('order');
+
+let currentLines = [];
+
+async function loadOrder() {
+  if (!orderId) {
+    document.getElementById('loadingMsg').style.display = 'none';
+    document.getElementById('noOrderMsg').style.display = 'block';
+    return;
+  }
+
+  try {
+    const [orderResp, linesResp] = await Promise.all([
+      fetch(`${SUPABASE_URL}/rest/v1/orders?id=eq.${encodeURIComponent(orderId)}&select=*`, {
+        headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
+      }),
+      fetch(`${SUPABASE_URL}/rest/v1/order_lines?order_id=eq.${encodeURIComponent(orderId)}&select=*&order=category.asc`, {
+        headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
+      })
+    ]);
+    if (!orderResp.ok || !linesResp.ok) throw new Error('fetch failed');
+    const orders = await orderResp.json();
+    if (!orders.length) {
+      document.getElementById('loadingMsg').style.display = 'none';
+      document.getElementById('noOrderMsg').style.display = 'block';
+      document.querySelector('#noOrderMsg p').textContent = "Commande introuvable. / Bestelling niet gevonden.";
+      return;
+    }
+    const order = orders[0];
+    currentLines = await linesResp.json();
+
+    renderOrderSummary(order);
+    renderLines(currentLines);
+
+    document.getElementById('loadingMsg').style.display = 'none';
+    document.getElementById('content').style.display = 'block';
+    document.getElementById('actionsBar').style.display = 'flex';
+  } catch (e) {
+    console.error(e);
+    document.getElementById('loadingMsg').innerHTML = '<p class="placeholder-msg">Erreur lors du chargement. Rechargez la page. / Fout bij het laden. Herlaad de pagina.</p>';
+  }
+}
+
+function renderOrderSummary(order) {
+  document.getElementById('orderSummary').innerHTML = `
+    <strong>Magasin / Winkel :</strong> ${order.store_name || '-'}<br>
+    <strong>Date de livraison / Leveringsdatum :</strong> ${order.delivery_date || '-'}<br>
+    <strong>Envoy&eacute;e le / Verzonden op :</strong> ${order.created_at ? new Date(order.created_at).toLocaleString('fr-BE') : '-'}
+  `;
+  if (order.picking_completed_at) {
+    const banner = document.getElementById('alreadyPickedBanner');
+    banner.style.display = 'block';
+    banner.textContent = `Cette commande a déjà été préparée le ${new Date(order.picking_completed_at).toLocaleString('fr-BE')} par ${order.picked_by || '?'}. Vous pouvez soumettre à nouveau pour corriger. / Deze bestelling werd al klaargemaakt op ${new Date(order.picking_completed_at).toLocaleString('fr-BE')} door ${order.picked_by || '?'}. U kunt opnieuw indienen om te corrigeren.`;
+  }
+}
+
+function renderLines(lines) {
+  const container = document.getElementById('lineSections');
+  container.innerHTML = '';
+
+  if (!lines.length) {
+    container.appendChild(el('div', { class: 'card' }, [
+      el('p', { class: 'placeholder-msg', text: "Aucune ligne d'article pour cette commande (commande logistique uniquement). / Geen artikelregel voor deze bestelling (enkel logistieke bestelling)." })
+    ]));
+    return;
+  }
+
+  const byCategory = {};
+  lines.forEach(l => {
+    (byCategory[l.category] = byCategory[l.category] || []).push(l);
+  });
+
+  Object.keys(byCategory).sort().forEach(category => {
+    const card = el('div', { class: 'card' });
+    card.appendChild(el('div', { class: 'group-title', text: category }));
+    const table = el('table', { class: 'items' });
+    table.appendChild(el('thead', {}, [el('tr', {}, [
+      el('th', { text: 'Article (FR / NL)' }),
+      el('th', { class: 'num', text: 'Commandé / Besteld' }),
+      el('th', { class: 'num', text: 'Prélevé / Opgehaald' })
+    ])]));
+    const tbody = el('tbody');
+    byCategory[category].forEach(line => {
+      const tr = el('tr', { 'data-line-id': line.id });
+      const tdArt = el('td');
+      tdArt.appendChild(el('div', { class: 'article-fr', text: line.article_fr || '' }));
+      if (line.article_nl) tdArt.appendChild(el('div', { class: 'article-nl', text: line.article_nl }));
+      tr.appendChild(tdArt);
+      tr.appendChild(el('td', { class: 'num', text: String(line.quantity) }));
+      const tdPicked = el('td', { class: 'num' });
+      const initial = (line.quantity_picked !== null && line.quantity_picked !== undefined) ? line.quantity_picked : line.quantity;
+      const input = el('input', { type: 'number', min: '0', value: String(initial) });
+      input.addEventListener('input', () => updateDiffHighlight(tr, input, line.quantity));
+      tdPicked.appendChild(input);
+      tr.appendChild(tdPicked);
+      updateDiffHighlight(tr, input, line.quantity);
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+    card.appendChild(table);
+    container.appendChild(card);
+  });
+}
+
+function updateDiffHighlight(tr, input, ordered) {
+  const val = input.value === '' ? NaN : parseFloat(input.value);
+  const isDiff = !isNaN(val) && val !== parseFloat(ordered);
+  tr.classList.toggle('diff-row', isDiff);
+}
+
+document.getElementById('btnSubmit').addEventListener('click', async () => {
+  const pickedBy = document.getElementById('pickedByInput').value.trim();
+  if (!pickedBy) {
+    toast('Merci d\'indiquer votre nom avant de valider. / Gelieve uw naam in te vullen voor u bevestigt.');
+    return;
+  }
+
+  const rows = document.querySelectorAll('#lineSections tr[data-line-id]');
+  const lines = Array.from(rows).map(tr => {
+    const input = tr.querySelector('input[type=number]');
+    const val = input.value === '' ? null : parseFloat(input.value);
+    return { id: tr.getAttribute('data-line-id'), quantity_picked: val };
+  });
+
+  const btn = document.getElementById('btnSubmit');
+  btn.disabled = true;
+  toast('Enregistrement en cours... / Bezig met opslaan...');
+
+  try {
+    const resp = await fetch(`${SUPABASE_URL}/functions/v1/submit-picking`, {
+      method: 'POST',
+      headers: {
+        apikey: SUPABASE_KEY,
+        Authorization: `Bearer ${SUPABASE_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ orderId, pickedBy, lines })
+    });
+    const result = await resp.json();
+    if (!resp.ok) throw new Error(result.error || ('submit-picking failed: ' + resp.status));
+
+    if (result.diffCount > 0) {
+      toast(result.emailSent
+        ? `Préparation enregistrée. ${result.diffCount} écart(s) détecté(s), email envoyé au magasin. / Voorbereiding opgeslagen. ${result.diffCount} verschil(len) gevonden, e-mail verzonden naar de winkel.`
+        : `Préparation enregistrée. ${result.diffCount} écart(s) détecté(s), mais l'email au magasin a échoué (${result.emailError || 'raison inconnue'}). / Voorbereiding opgeslagen. ${result.diffCount} verschil(len), maar de e-mail naar de winkel is mislukt (${result.emailError || 'onbekende reden'}).`);
+    } else {
+      toast('Préparation enregistrée. Aucun écart, pas d\'email envoyé. / Voorbereiding opgeslagen. Geen verschil, geen e-mail verzonden.');
+    }
+  } catch (e) {
+    console.error(e);
+    toast("Échec de l'enregistrement de la préparation. Réessayez. / Opslaan van de voorbereiding is mislukt. Probeer opnieuw.");
+  }
+  btn.disabled = false;
+});
+
+loadOrder();
+</script>
+
+</body>
+</html>

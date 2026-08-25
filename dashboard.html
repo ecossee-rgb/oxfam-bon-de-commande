@@ -71,6 +71,7 @@
   .pill { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 11px; }
   .pill-oui { background: #dff3e6; color: #1e6b3a; }
   .pill-non { background: #f3e6e6; color: #8a2f2f; }
+  .pill-todo { background: #f3f3f3; color: #666; }
   .details-row td { background: #fafcfb; }
   .details-toggle { cursor: pointer; color: var(--oxfam-green); font-size: 12px; text-decoration: underline; }
   .lines-table { width: 100%; border-collapse: collapse; font-size: 12px; margin: 6px 0; }
@@ -78,6 +79,7 @@
   .empty-msg { color: #888; font-style: italic; font-size: 13px; padding: 20px; text-align: center; }
   canvas { max-height: 320px; }
   .status-msg { font-size: 13px; color: #666; margin-bottom: 10px; }
+  .action-link { display: block; color: var(--oxfam-green); font-weight: 600; text-decoration: none; font-size: 12px; margin-bottom: 4px; }
 </style>
 </head>
 <body>
@@ -164,6 +166,7 @@
             <th data-sort="want_return">Retour / Terugkeer</th>
             <th>Remarques / Opmerkingen</th>
             <th></th>
+            <th>Préparation / Klaarmaken</th>
             <th>Actions</th>
           </tr>
         </thead>
@@ -199,7 +202,7 @@ async function fetchAll() {
     if (!ordersResp.ok || !linesResp.ok) throw new Error('fetch failed');
     allOrders = await ordersResp.json();
     allLines = await linesResp.json();
-    statusMsg.textContent = `${allOrders.length} commande(s) charg\u00e9e(s). / ${allOrders.length} bestelling(en) geladen.`;
+    statusMsg.textContent = `${allOrders.length} commande(s) chargée(s). / ${allOrders.length} bestelling(en) geladen.`;
     populateFilterOptions();
     renderAll();
   } catch (e) {
@@ -331,10 +334,16 @@ function pill(val) {
   return '-';
 }
 
+function pickingPill(order) {
+  return order.picking_completed_at
+    ? '<span class="pill pill-oui">Pr&eacute;par&eacute;e / Klaar</span>'
+    : '<span class="pill pill-todo">&Agrave; pr&eacute;parer / Te doen</span>';
+}
+
 function renderOrdersTable(orders, allLinesForScope) {
   const body = document.getElementById('ordersBody');
   if (!orders.length) {
-    body.innerHTML = `<tr><td colspan="9" class="empty-msg">Aucune commande pour ces filtres. / Geen bestellingen voor deze filters.</td></tr>`;
+    body.innerHTML = `<tr><td colspan="10" class="empty-msg">Aucune commande pour ces filtres. / Geen bestellingen voor deze filters.</td></tr>`;
     return;
   }
 
@@ -365,15 +374,22 @@ function renderOrdersTable(orders, allLinesForScope) {
         <td>${pill(o.want_return)}</td>
         <td>${escapeHtml(o.remarques_logistique)}</td>
         <td><span class="details-toggle" data-target="${rowId}">Détails / Details (${lines.length})</span></td>
-        <td><a href="index.html?edit=${encodeURIComponent(o.id)}" class="edit-link" style="color:var(--oxfam-green); font-weight:600; text-decoration:none;">Modifier / Wijzigen</a></td>
+        <td>
+          ${pickingPill(o)}
+          ${o.picking_completed_at ? `<div style="font-size:11px; color:#666; margin-top:3px;">${escapeHtml(o.picked_by || '')}</div>` : ''}
+        </td>
+        <td>
+          <a href="index.html?edit=${encodeURIComponent(o.id)}" class="action-link">Modifier / Wijzigen</a>
+          <a href="picking.html?order=${encodeURIComponent(o.id)}" class="action-link">Pr&eacute;parer / Klaarmaken</a>
+        </td>
       </tr>
       <tr class="details-row" id="${rowId}" style="display:none;">
-        <td colspan="9">
+        <td colspan="10">
           ${lines.length ? `
             <table class="lines-table">
-              <thead><tr><th>Catégorie / Categorie</th><th>Article (FR)</th><th>Article (NL)</th><th>Quantité / Aantal</th></tr></thead>
+              <thead><tr><th>Catégorie / Categorie</th><th>Article (FR)</th><th>Article (NL)</th><th>Quantité / Aantal</th><th>Pr&eacute;lev&eacute; / Opgehaald</th></tr></thead>
               <tbody>
-                ${lines.map(l => `<tr><td>${escapeHtml(l.category)}</td><td>${escapeHtml(l.article_fr)}</td><td>${escapeHtml(l.article_nl)}</td><td>${l.quantity}</td></tr>`).join('')}
+                ${lines.map(l => `<tr><td>${escapeHtml(l.category)}</td><td>${escapeHtml(l.article_fr)}</td><td>${escapeHtml(l.article_nl)}</td><td>${l.quantity}</td><td>${l.quantity_picked !== null && l.quantity_picked !== undefined ? l.quantity_picked : '-'}</td></tr>`).join('')}
               </tbody>
             </table>
           ` : "<em>Aucune ligne d'article (commande logistique uniquement). / Geen artikelregel (enkel logistieke bestelling).</em>"}
