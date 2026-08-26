@@ -116,6 +116,7 @@
   }
   .btn-primary { background: var(--oxfam-green); color: white; }
   .btn-secondary { background: white; color: var(--oxfam-dark); border: 1px solid var(--oxfam-green); }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
   .placeholder-msg { color: #888; font-size: 13px; font-style: italic; }
   #toast { position: fixed; top: 16px; right: 16px; background: var(--oxfam-dark); color: white; padding: 10px 16px; border-radius: 8px; font-size: 13px; display: none; z-index: 999; max-width: 320px; }
   .checkline { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
@@ -1380,10 +1381,29 @@ document.getElementById('btnSend').addEventListener('click', async () => {
 });
 
 // --- Edit mode: reload an existing order from Supabase for editing ---
+//
+// bootstrapEditMode() fills the form asynchronously (it fetches the order,
+// then waits on live Odoo stock lookups for every Informatique category
+// before applying the saved snapshot - see applyFormSnapshot()). Until that
+// finishes, fields like deliveryDate are still empty even though the page
+// already looks fully loaded and clickable. Clicking "Envoyer" or
+// "Télécharger une copie" during that window used to read an empty date and
+// show a misleading "date must be a workday" error. To prevent that, the
+// action buttons are disabled for the whole loading window below and only
+// re-enabled once the form has actually been populated (or loading failed).
 async function bootstrapEditMode() {
   const params = new URLSearchParams(window.location.search);
   const editId = params.get('edit');
   if (!editId) return;
+
+  const sendBtn = document.getElementById('btnSend');
+  const exportBtn = document.getElementById('btnExport');
+  const resetBtn = document.getElementById('btnReset');
+  const loadingBtns = [sendBtn, exportBtn, resetBtn].filter(Boolean);
+  loadingBtns.forEach(b => { b.disabled = true; });
+  const originalSendLabel = sendBtn ? sendBtn.textContent : '';
+  if (sendBtn) sendBtn.textContent = 'Chargement de la commande... / Bestelling wordt geladen...';
+  toast('Chargement de la commande à modifier... / De te wijzigen bestelling wordt geladen...');
 
   try {
     const resp = await fetch(`${SUPABASE_URL}/rest/v1/orders?id=eq.${encodeURIComponent(editId)}&select=*`, {
@@ -1393,11 +1413,13 @@ async function bootstrapEditMode() {
     const rows = await resp.json();
     if (!rows.length) {
       toast("Commande introuvable pour la modification. / Bestelling niet gevonden om te wijzigen.");
+      if (sendBtn) sendBtn.textContent = originalSendLabel;
       return;
     }
     const order = rows[0];
     if (!order.form_snapshot) {
       toast("Cette commande a été enregistrée avant l'ajout de la fonction de modification et ne peut pas être rechargée automatiquement. / Deze bestelling werd geregistreerd vóór de wijzigingsfunctie en kan niet automatisch worden herladen.");
+      if (sendBtn) sendBtn.textContent = originalSendLabel;
       return;
     }
 
@@ -1407,8 +1429,7 @@ async function bootstrapEditMode() {
     renderSections();
     await applyFormSnapshot(order.form_snapshot);
 
-    const sendBtn = document.getElementById('btnSend');
-    sendBtn.textContent = 'Enregistrer les modifications / Wijzigingen opslaan';
+    if (sendBtn) sendBtn.textContent = 'Enregistrer les modifications / Wijzigingen opslaan';
 
     const banner = document.getElementById('editBanner');
     banner.style.display = 'block';
@@ -1418,6 +1439,9 @@ async function bootstrapEditMode() {
   } catch (e) {
     console.error(e);
     toast("Impossible de charger la commande à modifier. / De te wijzigen bestelling kon niet worden geladen.");
+    if (sendBtn) sendBtn.textContent = originalSendLabel;
+  } finally {
+    loadingBtns.forEach(b => { b.disabled = false; });
   }
 }
 bootstrapEditMode();
