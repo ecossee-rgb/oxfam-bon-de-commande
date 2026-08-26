@@ -270,6 +270,58 @@ Object.keys(DATA.stores).sort().forEach(name => {
   storeSelect.appendChild(opt);
 });
 
+// Which weekday(s) each shop's delivery round passes by, from the internal
+// "tournées" planning file (1 = lundi/maandag ... 5 = vendredi/vrijdag).
+// Shops not listed here have no known round yet, so any weekday is allowed.
+const DELIVERY_DAYS = {
+  "Bookshop Kortrijk": [1],
+  "Shop Nivelles": [2],
+  "Shop Herstal Laixheau": [3, 4],
+  "Shop Mechelen": [4],
+  "Shop Brabançonne": [2, 5],
+  "Shop Knokke-Heist": [1],
+  "Shop Dinant": [2],
+  "Shop Outre-Meuse": [3],
+  "Shop Mons Textile": [4],
+  "Shop Belgica": [2, 5],
+  "Shop Oostende": [1, 5],
+  "Shop Ciney": [2],
+  "Shop Fléron": [3],
+  "Shop Antwerpen Lange Koertpoortstraat": [4, 5],
+  "Bookshop Uccle": [5],
+  "Shop Brugge": [1],
+  "Shop Namur Bomel": [2],
+  "Shop Casquette": [3],
+  "RE.BEL Féronstrée": [4],
+  "Bookshop Antwerpen": [1],
+  "Shop Charleroi rue de la Montagne": [2],
+  "Bookshop Liège": [3],
+  "Shop Aalst Lange Zoutstraat": [5],
+  "Boutique Antwerpen": [1],
+  "Shop Halle Volpestraat": [2],
+  "Bookshop Namur": [3],
+  "Shop Leuven Diestsestraat": [5],
+  "Shop Wilrijk": [1],
+  "Shop Marcinelle": [2],
+  "Computer & Bookshop Mons": [3],
+  "Shop Gent Steendam": [1],
+  "Bookshop Leuven": [3],
+  "Bookshop Gent": [1],
+  "Shop Marolles": [2],
+  "Shop Vilvoorde Leuvensestraat": [3],
+  "Shop Vintage": [2],
+};
+const DAY_NAMES_FR = { 1: 'lundi', 2: 'mardi', 3: 'mercredi', 4: 'jeudi', 5: 'vendredi' };
+const DAY_NAMES_NL = { 1: 'maandag', 2: 'dinsdag', 3: 'woensdag', 4: 'donderdag', 5: 'vrijdag' };
+function getAllowedWeekdays(store) {
+  return DELIVERY_DAYS[store] || null; // null = no restriction known, any weekday ok
+}
+function formatAllowedDays(days) {
+  const fr = days.map(d => DAY_NAMES_FR[d]).join(', ');
+  const nl = days.map(d => DAY_NAMES_NL[d]).join(', ');
+  return { fr, nl };
+}
+
 // Delivery date must be at least 3 working days (Mon-Fri) from today.
 function computeMinDeliveryDate() {
   const d = new Date();
@@ -299,25 +351,57 @@ function isWeekend(dateStr) {
   const day = d.getDay(); // 0 = Sunday, 6 = Saturday
   return day === 0 || day === 6;
 }
-function isDeliveryDateValid(dateStr) {
-  return !!dateStr && dateStr >= MIN_DELIVERY_DATE_ISO && !isWeekend(dateStr);
+function isAllowedDeliveryWeekday(dateStr, store) {
+  const days = getAllowedWeekdays(store);
+  if (!days) return true; // no known round for this shop - don't block
+  const d = new Date(dateStr + 'T00:00:00');
+  return days.includes(d.getDay());
+}
+function isDeliveryDateValid(dateStr, store) {
+  return !!dateStr && dateStr >= MIN_DELIVERY_DATE_ISO && !isWeekend(dateStr) && isAllowedDeliveryWeekday(dateStr, store);
+}
+function deliveryDateErrorMessage(store) {
+  const days = store ? getAllowedWeekdays(store) : null;
+  if (days) {
+    const { fr, nl } = formatAllowedDays(days);
+    return `La date de livraison doit correspondre au jour de tournée de votre magasin (${fr}), et être au moins 3 jours ouvrables après aujourd'hui (à partir du ${formatDateHuman(MIN_DELIVERY_DATE)}). / De leveringsdatum moet overeenkomen met de rondedag van uw winkel (${nl}), en minstens 3 werkdagen na vandaag zijn (vanaf ${formatDateHuman(MIN_DELIVERY_DATE)}).`;
+  }
+  return `La date de livraison doit être un jour ouvrable (lundi-vendredi), au moins 3 jours ouvrables après aujourd'hui (à partir du ${formatDateHuman(MIN_DELIVERY_DATE)}). / De leveringsdatum moet een werkdag zijn (maandag-vrijdag), minstens 3 werkdagen na vandaag (vanaf ${formatDateHuman(MIN_DELIVERY_DATE)}).`;
 }
 const deliveryDateInput = document.getElementById('deliveryDate');
-if (deliveryDateInput) {
-  deliveryDateInput.min = MIN_DELIVERY_DATE_ISO;
-  const deliveryDateHint = document.getElementById('deliveryDateHint');
-  if (deliveryDateHint) {
-    const humanDate = formatDateHuman(MIN_DELIVERY_DATE);
+const deliveryDateHint = document.getElementById('deliveryDateHint');
+function updateDeliveryDateHint() {
+  if (!deliveryDateHint) return;
+  const humanDate = formatDateHuman(MIN_DELIVERY_DATE);
+  const store = storeSelect.value;
+  const days = store ? getAllowedWeekdays(store) : null;
+  if (days) {
+    const { fr, nl } = formatAllowedDays(days);
+    deliveryDateHint.textContent = `Votre magasin est livré le : ${fr} (à partir du ${humanDate} au plus tôt). / Uw winkel wordt beleverd op: ${nl} (ten vroegste vanaf ${humanDate}).`;
+  } else {
     deliveryDateHint.textContent = `Date la plus proche possible : ${humanDate} (minimum 3 jours ouvrables, week-ends exclus). / Vroegst mogelijke datum: ${humanDate} (minimum 3 werkdagen, weekends uitgesloten).`;
   }
+}
+if (deliveryDateInput) {
+  deliveryDateInput.min = MIN_DELIVERY_DATE_ISO;
+  updateDeliveryDateHint();
   deliveryDateInput.addEventListener('change', () => {
     const val = deliveryDateInput.value;
-    if (val && isWeekend(val)) {
-      toast('Les livraisons ne sont pas possibles le week-end. Merci de choisir un jour ouvrable (lundi-vendredi). / Leveringen zijn niet mogelijk in het weekend. Kies een werkdag (maandag-vrijdag).');
+    const store = storeSelect.value;
+    if (val && !isDeliveryDateValid(val, store)) {
+      toast(deliveryDateErrorMessage(store));
       deliveryDateInput.value = '';
     }
   });
 }
+storeSelect.addEventListener('change', () => {
+  updateDeliveryDateHint();
+  const val = deliveryDateInput ? deliveryDateInput.value : '';
+  if (val && !isDeliveryDateValid(val, storeSelect.value)) {
+    toast(deliveryDateErrorMessage(storeSelect.value));
+    deliveryDateInput.value = '';
+  }
+});
 
 // Returning IT repair bins requires proper packing and a stated reason -
 // only show that reminder + reason field once the shop has actually
@@ -974,8 +1058,8 @@ document.getElementById('btnExport').addEventListener('click', () => {
   const store = storeSelect.value;
   if (!store) { toast("Merci de choisir votre magasin avant d'exporter. / Gelieve uw winkel te kiezen voordat u exporteert."); return; }
   const dateVal = document.getElementById('deliveryDate').value;
-  if (!isDeliveryDateValid(dateVal)) {
-    toast(`La date de livraison doit être un jour ouvrable (lundi-vendredi), au moins 3 jours ouvrables après aujourd'hui (à partir du ${formatDateHuman(MIN_DELIVERY_DATE)}). / De leveringsdatum moet een werkdag zijn (maandag-vrijdag), minstens 3 werkdagen na vandaag (vanaf ${formatDateHuman(MIN_DELIVERY_DATE)}).`);
+  if (!isDeliveryDateValid(dateVal, store)) {
+    toast(deliveryDateErrorMessage(store));
     return;
   }
   if (!document.querySelector('input[name="wantDelivery"]:checked')) {
@@ -1346,8 +1430,8 @@ document.getElementById('btnSend').addEventListener('click', async () => {
   if (!store) { toast("Merci de choisir votre magasin avant d'envoyer. / Gelieve uw winkel te kiezen voordat u verstuurt."); return; }
   const dateVal = document.getElementById('deliveryDate').value;
   if (!dateVal) { toast('Merci de renseigner la date de livraison. / Gelieve de leveringsdatum in te vullen.'); return; }
-  if (!isDeliveryDateValid(dateVal)) {
-    toast(`La date de livraison doit être un jour ouvrable (lundi-vendredi), au moins 3 jours ouvrables après aujourd'hui (à partir du ${formatDateHuman(MIN_DELIVERY_DATE)}). / De leveringsdatum moet een werkdag zijn (maandag-vrijdag), minstens 3 werkdagen na vandaag (vanaf ${formatDateHuman(MIN_DELIVERY_DATE)}).`);
+  if (!isDeliveryDateValid(dateVal, store)) {
+    toast(deliveryDateErrorMessage(store));
     return;
   }
   if (!document.querySelector('input[name="wantDelivery"]:checked')) {
