@@ -775,12 +775,18 @@ function buildWorkbook() {
   const flags = DATA.stores[store] || {};
 
   function addQtySheet(sheetName, headerTitle, prefix, def) {
+    const qtyRows = collectQtyRows(prefix, def);
+    const remarksEl = document.getElementById(`${prefix}__remarques`);
+    const remarks = remarksEl ? remarksEl.value : '';
+    // Skip this sheet entirely if nothing was actually ordered in this
+    // section (and no remark was left either) - the export should only
+    // contain the tabs that are relevant to this particular order.
+    if (!qtyRows.length && !remarks) return;
     const header = ['Article (FR)', 'Article (NL)', 'Commandé / Besteld', 'Livré / Geleverd (Yunus)'];
     if (COLOR_CHECKBOX_SECTIONS.includes(prefix)) header.push('Rouge / Rood', 'Jaune / Geel', 'Vert / Groen');
     const rows = [[headerTitle], [], header];
-    collectQtyRows(prefix, def).forEach(r => rows.push(r));
-    const remarksEl = document.getElementById(`${prefix}__remarques`);
-    if (remarksEl && remarksEl.value) { rows.push([]); rows.push(['Remarques', remarksEl.value]); }
+    qtyRows.forEach(r => rows.push(r));
+    if (remarks) { rows.push([]); rows.push(['Remarques', remarks]); }
     const sheet = XLSX.utils.aoa_to_sheet(rows);
     XLSX.utils.book_append_sheet(wb, sheet, sheetName.substring(0,31));
   }
@@ -793,14 +799,21 @@ function buildWorkbook() {
   if (flags.booksBroc) addQtySheet('Books&Broc', DATA.booksBroc.label, 'booksBroc', DATA.booksBroc);
   if (flags.economat) addQtySheet('Économat-Marketing', DATA.economat.label, 'economat', DATA.economat);
 
-  if (flags.informatique) {
+  // Only add the Informatique tab if at least one line actually has an
+  // ordered quantity (hasInformatiqueLines() checks the "Commandé" column,
+  // not just any filled-in field) - same rule as the other section sheets.
+  if (flags.informatique && hasInformatiqueLines()) {
     const rows = [['INFORMATIQUE / INFORMATICA'], []];
-    INFO_CATEGORIES.forEach((cat, i) => {
+    let firstCat = true;
+    INFO_CATEGORIES.forEach((cat) => {
       const cols = infoColumns(cat);
-      if (i > 0) rows.push([]);
+      const catRows = collectDeviceRows(cat.prefix, cols);
+      if (!catRows.length) return;
+      if (!firstCat) rows.push([]);
+      firstCat = false;
       rows.push([cat.title.toUpperCase()]);
       rows.push(cols.map(c => INFO_COLUMN_LABELS_FR[c.key] || c.label));
-      collectDeviceRows(cat.prefix, cols).forEach(r => rows.push(r));
+      catRows.forEach(r => rows.push(r));
     });
     const sheet = XLSX.utils.aoa_to_sheet(rows);
     XLSX.utils.book_append_sheet(wb, sheet, 'Informatique');
