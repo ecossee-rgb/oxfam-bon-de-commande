@@ -9,6 +9,13 @@
      community "xlsx" build can set column widths but silently ignores any
      cell .s style, so it can't produce a nicely formatted export. -->
 <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
+<!-- flatpickr: lets us grey out / block unavailable delivery dates (weekends,
+     days before the 3-day minimum lead time, and days that aren't the
+     selected shop's delivery round) directly in the calendar, instead of
+     only rejecting an invalid date after it's picked. -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/l10n/fr.js"></script>
 <style>
   :root {
     --oxfam-green: #00693e;
@@ -163,7 +170,7 @@
       </div>
       <div class="field">
         <label>Date de livraison / Leveringsdatum</label>
-        <input type="date" id="deliveryDate">
+        <input type="text" id="deliveryDate" placeholder="jj/mm/aaaa" autocomplete="off">
         <p class="hint" id="deliveryDateHint"></p>
       </div>
     </div>
@@ -377,29 +384,55 @@ function updateDeliveryDateHint() {
   const days = store ? getAllowedWeekdays(store) : null;
   if (days) {
     const { fr, nl } = formatAllowedDays(days);
-    deliveryDateHint.textContent = `Votre magasin est livré le : ${fr} (à partir du ${humanDate} au plus tôt). / Uw winkel wordt beleverd op: ${nl} (ten vroegste vanaf ${humanDate}).`;
+    deliveryDateHint.textContent = `Votre magasin est livré le : ${fr} (à partir du ${humanDate} au plus tôt). Les autres jours sont grisés dans le calendrier. / Uw winkel wordt beleverd op: ${nl} (ten vroegste vanaf ${humanDate}). De andere dagen zijn grijs in de kalender.`;
   } else {
-    deliveryDateHint.textContent = `Date la plus proche possible : ${humanDate} (minimum 3 jours ouvrables, week-ends exclus). / Vroegst mogelijke datum: ${humanDate} (minimum 3 werkdagen, weekends uitgesloten).`;
+    deliveryDateHint.textContent = `Date la plus proche possible : ${humanDate} (minimum 3 jours ouvrables, week-ends exclus). Choisissez d'abord votre magasin pour voir ses jours de livraison. / Vroegst mogelijke datum: ${humanDate} (minimum 3 werkdagen, weekends uitgesloten). Kies eerst uw winkel om de leverdagen te zien.`;
   }
 }
-if (deliveryDateInput) {
-  deliveryDateInput.min = MIN_DELIVERY_DATE_ISO;
-  updateDeliveryDateHint();
-  deliveryDateInput.addEventListener('change', () => {
-    const val = deliveryDateInput.value;
-    const store = storeSelect.value;
-    if (val && !isDeliveryDateValid(val, store)) {
-      toast(deliveryDateErrorMessage(store));
-      deliveryDateInput.value = '';
-    }
+// Builds the flatpickr "disable" predicate for the currently selected shop:
+// weekends are always disabled, and if the shop has a known delivery round,
+// any weekday that isn't part of that round is disabled too.
+function buildDeliveryDateDisableFn(store) {
+  const days = store ? getAllowedWeekdays(store) : null;
+  return function (date) {
+    const wd = date.getDay();
+    if (wd === 0 || wd === 6) return true;
+    if (days && !days.includes(wd)) return true;
+    return false;
+  };
+}
+let deliveryFP = null;
+if (deliveryDateInput && window.flatpickr) {
+  deliveryFP = flatpickr(deliveryDateInput, {
+    locale: 'fr',
+    dateFormat: 'Y-m-d',
+    altInput: true,
+    altFormat: 'd/m/Y',
+    minDate: MIN_DELIVERY_DATE_ISO,
+    disableMobile: true,
+    disable: [buildDeliveryDateDisableFn(storeSelect.value)],
+    onChange: function (selectedDates, dateStr) {
+      const store = storeSelect.value;
+      if (dateStr && !isDeliveryDateValid(dateStr, store)) {
+        // Shouldn't normally happen since the calendar already blocks these
+        // dates, but keep it as a safety net (e.g. programmatic changes).
+        toast(deliveryDateErrorMessage(store));
+        deliveryFP.clear();
+      }
+    },
   });
 }
+updateDeliveryDateHint();
 storeSelect.addEventListener('change', () => {
   updateDeliveryDateHint();
-  const val = deliveryDateInput ? deliveryDateInput.value : '';
-  if (val && !isDeliveryDateValid(val, storeSelect.value)) {
-    toast(deliveryDateErrorMessage(storeSelect.value));
-    deliveryDateInput.value = '';
+  const store = storeSelect.value;
+  if (deliveryFP) {
+    deliveryFP.set('disable', [buildDeliveryDateDisableFn(store)]);
+    const val = deliveryDateInput.value;
+    if (val && !isDeliveryDateValid(val, store)) {
+      toast(deliveryDateErrorMessage(store));
+      deliveryFP.clear();
+    }
   }
 });
 
@@ -792,6 +825,11 @@ document.getElementById('btnReset').addEventListener('click', () => {
     });
     updateBacsITReasonVisibility();
     renderSections();
+    if (deliveryFP) {
+      deliveryFP.clear();
+      deliveryFP.set('disable', [buildDeliveryDateDisableFn('')]);
+    }
+    updateDeliveryDateHint();
   }
 });
 
@@ -1241,6 +1279,14 @@ async function applyFormSnapshot(snapshot) {
     if (elm.type === 'checkbox') elm.checked = !!snapshot.fields[id];
     else elm.value = snapshot.fields[id];
   });
+  // Setting deliveryDate.value directly above (generic restore loop) doesn't
+  // update flatpickr's own internal state or its visible alt-input text -
+  // sync those explicitly now that the shop (and its allowed weekdays) has
+  // already been restored via storeSelect.value earlier in bootstrapEditMode.
+  if (deliveryFP && snapshot.fields && snapshot.fields.deliveryDate) {
+    deliveryFP.set('disable', [buildDeliveryDateDisableFn(storeSelect.value)]);
+    deliveryFP.setDate(snapshot.fields.deliveryDate, false);
+  }
   Object.keys(snapshot.radioGroups || {}).forEach(name => {
     const val = snapshot.radioGroups[name];
     document.querySelectorAll(`input[type="radio"][name="${name}"]`).forEach(r => {
@@ -1615,6 +1661,7 @@ async function bootstrapEditMode() {
 
     storeSelect.value = order.store_name;
     renderSections();
+    updateDeliveryDateHint();
     await applyFormSnapshot(order.form_snapshot);
     updateBacsITReasonVisibility();
 
