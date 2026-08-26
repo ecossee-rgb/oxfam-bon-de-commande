@@ -126,6 +126,15 @@
   .checkline { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
   .checkline input { width: auto; }
   .checkline label { margin-bottom: 0; font-weight: 400; }
+  .qty-list { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .qty-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 8px 12px; border-bottom: 1px solid var(--border);
+  }
+  .qty-row:last-child { border-bottom: none; }
+  .qty-row:nth-child(odd) { background: #fafcfb; }
+  .qty-row-label { font-size: 13px; font-weight: 600; color: #333; }
+  .qty-row input.qty-input { width: 90px; flex-shrink: 0; text-align: center; }
 </style>
 </head>
 <body>
@@ -190,31 +199,34 @@
       <p class="hint">1 chariot = 12 sacs / 1 rolkar = 12 zakken</p>
     </div>
 
-    <div class="row2">
-      <div class="field">
-        <label>N° de chariots pour retour à Yunus / Aantal rolkarren</label>
-        <input type="number" min="0" id="nbChariots">
-      </div>
-      <div class="field">
-        <label>N° de bacs de réparations IT / Aantal bakken reparaties IT (transport de valeur !)</label>
-        <input type="number" min="0" id="nbBacsIT">
-      </div>
-    </div>
-
-    <div class="row2">
-      <div class="field">
-        <label>N° de sacs avec de la petite monnaie / Aantal zakken kleingeld</label>
-        <input type="number" min="0" id="nbSacsMonnaie">
-      </div>
-      <div class="field">
-        <label>Cartons vides pour livres commandés / Kartonnen dozen voor boeken besteld</label>
-        <input type="number" min="0" id="nbCartonsLivres">
-      </div>
-    </div>
-
     <div class="field">
-      <label>Bacs jaunes pour déchets commandés / Gele bakken voor afval besteld</label>
-      <input type="number" min="0" id="nbBacsJaunes">
+      <div class="qty-list">
+        <div class="qty-row">
+          <span class="qty-row-label">N° de chariots pour retour à Yunus / Aantal rolkarren</span>
+          <input type="number" min="0" id="nbChariots" class="qty-input">
+        </div>
+        <div class="qty-row">
+          <span class="qty-row-label">N° de bacs de réparations IT / Aantal bakken reparaties IT (transport de valeur !)</span>
+          <input type="number" min="0" id="nbBacsIT" class="qty-input">
+        </div>
+        <div class="qty-row">
+          <span class="qty-row-label">N° de sacs avec de la petite monnaie / Aantal zakken kleingeld</span>
+          <input type="number" min="0" id="nbSacsMonnaie" class="qty-input">
+        </div>
+        <div class="qty-row">
+          <span class="qty-row-label">Cartons vides pour livres commandés / Kartonnen dozen voor boeken besteld</span>
+          <input type="number" min="0" id="nbCartonsLivres" class="qty-input">
+        </div>
+        <div class="qty-row">
+          <span class="qty-row-label">Bacs jaunes pour déchets commandés / Gele bakken voor afval besteld</span>
+          <input type="number" min="0" id="nbBacsJaunes" class="qty-input">
+        </div>
+      </div>
+    </div>
+
+    <div class="field" id="bacsITReasonWrap" style="display:none;">
+      <p class="hint" style="margin:0 0 6px; color:#8a2f2f;">Merci de vérifier que les articles sont correctement emballés et d'indiquer la raison du retour : / Gelieve na te gaan of de artikelen goed verpakt zijn en de reden van de terugkeer op te geven:</p>
+      <textarea id="bacsITReason" placeholder="Raison du retour / Reden van de terugkeer"></textarea>
     </div>
 
     <div class="checkline">
@@ -305,6 +317,21 @@ if (deliveryDateInput) {
       deliveryDateInput.value = '';
     }
   });
+}
+
+// Returning IT repair bins requires proper packing and a stated reason -
+// only show that reminder + reason field once the shop has actually
+// indicated they have bins to return.
+const nbBacsITInput = document.getElementById('nbBacsIT');
+const bacsITReasonWrap = document.getElementById('bacsITReasonWrap');
+function updateBacsITReasonVisibility() {
+  if (!nbBacsITInput || !bacsITReasonWrap) return;
+  const qty = parseFloat(nbBacsITInput.value);
+  bacsITReasonWrap.style.display = (qty > 0) ? 'block' : 'none';
+}
+if (nbBacsITInput) {
+  nbBacsITInput.addEventListener('input', updateBacsITReasonVisibility);
+  updateBacsITReasonVisibility();
 }
 
 const dynamicSections = document.getElementById('dynamicSections');
@@ -679,6 +706,7 @@ document.getElementById('btnReset').addEventListener('click', () => {
       if (i.type === 'radio' || i.type === 'checkbox') i.checked = false;
       else if (i.tagName !== 'SELECT' || i === storeSelect) i.value = '';
     });
+    updateBacsITReasonVisibility();
     renderSections();
   }
 });
@@ -798,6 +826,7 @@ function buildWorkbook() {
     ['Je veux un retour / Ik wil een terugkeer', radioVal('wantReturn')],
     ["N° de chariots pour retour à Yunus", document.getElementById('nbChariots').value],
     ["N° de bacs de réparations IT (transport de valeur)", document.getElementById('nbBacsIT').value],
+    ["Raison du retour (bacs IT)", document.getElementById('bacsITReason') ? document.getElementById('bacsITReason').value : ''],
     ["N° de sacs avec de la petite monnaie", document.getElementById('nbSacsMonnaie').value],
     ["Cartons vides pour livres (commandé)", document.getElementById('nbCartonsLivres').value],
     ["Bacs jaunes pour déchets (commandé)", document.getElementById('nbBacsJaunes').value],
@@ -1503,6 +1532,7 @@ async function bootstrapEditMode() {
     storeSelect.value = order.store_name;
     renderSections();
     await applyFormSnapshot(order.form_snapshot);
+    updateBacsITReasonVisibility();
 
     if (sendBtn) sendBtn.textContent = 'Enregistrer les modifications / Wijzigingen opslaan';
 
