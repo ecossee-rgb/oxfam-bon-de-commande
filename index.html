@@ -4,7 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Bon de commande - Bestelbon | Oxfam Magasins du monde</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<!-- xlsx-js-style: a drop-in fork of SheetJS 0.18.5 (same "XLSX" global and
+     API) that adds cell-style writing (bold/colored headers). The plain
+     community "xlsx" build can set column widths but silently ignores any
+     cell .s style, so it can't produce a nicely formatted export. -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
 <style>
   :root {
     --oxfam-green: #00693e;
@@ -741,6 +745,37 @@ function collectDeviceRows(prefix, columns) {
   return rows;
 }
 
+// --- Excel export styling helpers ---------------------------------------
+// Applied to every sheet's title/section/column-header rows so the export
+// reads like a formatted report rather than a flat data dump (feedback
+// from shop testing: "the resulting Excel file isn't very clear").
+const XLSX_TITLE_STYLE = { font: { bold: true, sz: 13, color: { rgb: '00351F' } } };
+const XLSX_SECTION_STYLE = { font: { bold: true, color: { rgb: '00351F' } } };
+const XLSX_HEADER_STYLE = {
+  font: { bold: true, color: { rgb: 'FFFFFF' } },
+  fill: { patternType: 'solid', fgColor: { rgb: '00693E' } }
+};
+
+function xlsxStyleCell(sheet, r, c, style) {
+  const addr = XLSX.utils.encode_cell({ r, c });
+  if (!sheet[addr]) sheet[addr] = { t: 's', v: '' };
+  sheet[addr].s = style;
+}
+function xlsxStyleRow(sheet, r, numCols, style) {
+  for (let c = 0; c < numCols; c++) xlsxStyleCell(sheet, r, c, style);
+}
+
+// Builds the "Résumé" sheet (title + key/value rows), styling row 0 as the
+// sheet title and any row index listed in sectionHeaderRows (stand-alone
+// labels like "LOGISTIQUE") as a smaller bold section header.
+function buildResumeSheet(resumeRows, sectionHeaderRows) {
+  const sheet = XLSX.utils.aoa_to_sheet(resumeRows);
+  sheet['!cols'] = [{ wch: 45 }, { wch: 30 }];
+  xlsxStyleRow(sheet, 0, 1, XLSX_TITLE_STYLE);
+  (sectionHeaderRows || []).forEach(r => xlsxStyleRow(sheet, r, 1, XLSX_SECTION_STYLE));
+  return sheet;
+}
+
 function buildWorkbook() {
   const store = storeSelect.value || '(non renseigné)';
   const date = document.getElementById('deliveryDate').value || '(non renseignée)';
@@ -770,7 +805,8 @@ function buildWorkbook() {
     ["Vidange produits OFT", document.getElementById('vidangeOFT').checked ? 'Oui' : 'Non'],
     ["Remarques logistique", document.getElementById('logistiqueRemarques').value]
   ];
-  const resumeSheet = XLSX.utils.aoa_to_sheet(resumeRows);
+  // Row 5 is the "LOGISTIQUE" section label - see buildResumeSheet().
+  const resumeSheet = buildResumeSheet(resumeRows, [5]);
   XLSX.utils.book_append_sheet(wb, resumeSheet, 'Résumé');
 
   const flags = DATA.stores[store] || {};
@@ -783,12 +819,18 @@ function buildWorkbook() {
     // section (and no remark was left either) - the export should only
     // contain the tabs that are relevant to this particular order.
     if (!qtyRows.length && !remarks) return;
+    const isColorSection = COLOR_CHECKBOX_SECTIONS.includes(prefix);
     const header = ['Article (FR)', 'Article (NL)', 'Commandé / Besteld', 'Livré / Geleverd (Yunus)'];
-    if (COLOR_CHECKBOX_SECTIONS.includes(prefix)) header.push('Rouge / Rood', 'Jaune / Geel', 'Vert / Groen');
+    if (isColorSection) header.push('Rouge / Rood', 'Jaune / Geel', 'Vert / Groen');
     const rows = [[headerTitle], [], header];
     qtyRows.forEach(r => rows.push(r));
     if (remarks) { rows.push([]); rows.push(['Remarques', remarks]); }
     const sheet = XLSX.utils.aoa_to_sheet(rows);
+    sheet['!cols'] = isColorSection
+      ? [{ wch: 32 }, { wch: 32 }, { wch: 14 }, { wch: 16 }, { wch: 10 }, { wch: 10 }, { wch: 10 }]
+      : [{ wch: 32 }, { wch: 32 }, { wch: 14 }, { wch: 16 }];
+    xlsxStyleRow(sheet, 0, 1, XLSX_TITLE_STYLE);
+    xlsxStyleRow(sheet, 2, header.length, XLSX_HEADER_STYLE);
     XLSX.utils.book_append_sheet(wb, sheet, sheetName.substring(0,31));
   }
 
@@ -805,6 +847,9 @@ function buildWorkbook() {
   // not just any filled-in field) - same rule as the other section sheets.
   if (flags.informatique && hasInformatiqueLines()) {
     const rows = [['INFORMATIQUE / INFORMATICA'], []];
+    const catTitleRows = [];
+    const colHeaderRows = [];
+    let maxCols = 1;
     let firstCat = true;
     INFO_CATEGORIES.forEach((cat) => {
       const cols = infoColumns(cat);
@@ -812,11 +857,19 @@ function buildWorkbook() {
       if (!catRows.length) return;
       if (!firstCat) rows.push([]);
       firstCat = false;
+      catTitleRows.push(rows.length);
       rows.push([cat.title.toUpperCase()]);
-      rows.push(cols.map(c => INFO_COLUMN_LABELS_FR[c.key] || c.label));
+      const headerLabels = cols.map(c => INFO_COLUMN_LABELS_FR[c.key] || c.label);
+      colHeaderRows.push(rows.length);
+      rows.push(headerLabels);
+      maxCols = Math.max(maxCols, headerLabels.length);
       catRows.forEach(r => rows.push(r));
     });
     const sheet = XLSX.utils.aoa_to_sheet(rows);
+    sheet['!cols'] = [{ wch: 42 }].concat(Array(Math.max(maxCols - 1, 0)).fill({ wch: 16 }));
+    xlsxStyleRow(sheet, 0, 1, XLSX_TITLE_STYLE);
+    catTitleRows.forEach(r => xlsxStyleRow(sheet, r, 1, XLSX_SECTION_STYLE));
+    colHeaderRows.forEach(r => xlsxStyleRow(sheet, r, maxCols, XLSX_HEADER_STYLE));
     XLSX.utils.book_append_sheet(wb, sheet, 'Informatique');
   }
 
@@ -861,17 +914,29 @@ function buildInformatiqueWorkbook() {
     ['Magasin / Winkel', store],
     ['Date de livraison / Leveringsdatum', date]
   ];
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(resumeRows), 'Résumé');
+  XLSX.utils.book_append_sheet(wb, buildResumeSheet(resumeRows, []), 'Résumé');
 
   const rows = [['INFORMATIQUE / INFORMATICA'], []];
+  const catTitleRows = [];
+  const colHeaderRows = [];
+  let maxCols = 1;
   INFO_CATEGORIES.forEach((cat, i) => {
     const cols = infoColumns(cat);
     if (i > 0) rows.push([]);
+    catTitleRows.push(rows.length);
     rows.push([cat.title.toUpperCase()]);
-    rows.push(cols.map(c => INFO_COLUMN_LABELS_FR[c.key] || c.label));
+    const headerLabels = cols.map(c => INFO_COLUMN_LABELS_FR[c.key] || c.label);
+    colHeaderRows.push(rows.length);
+    rows.push(headerLabels);
+    maxCols = Math.max(maxCols, headerLabels.length);
     collectDeviceRows(cat.prefix, cols).forEach(r => rows.push(r));
   });
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), 'Informatique');
+  const infoSheet = XLSX.utils.aoa_to_sheet(rows);
+  infoSheet['!cols'] = [{ wch: 42 }].concat(Array(Math.max(maxCols - 1, 0)).fill({ wch: 16 }));
+  xlsxStyleRow(infoSheet, 0, 1, XLSX_TITLE_STYLE);
+  catTitleRows.forEach(r => xlsxStyleRow(infoSheet, r, 1, XLSX_SECTION_STYLE));
+  colHeaderRows.forEach(r => xlsxStyleRow(infoSheet, r, maxCols, XLSX_HEADER_STYLE));
+  XLSX.utils.book_append_sheet(wb, infoSheet, 'Informatique');
 
   return wb;
 }
