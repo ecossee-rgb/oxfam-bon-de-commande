@@ -4,7 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Suivi des commandes - Oxfam Magasins du monde</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<!-- Loaded from jsDelivr rather than cdnjs: cdnjs has been intermittently
+     returning 503 for this exact file, which silently breaks the chart
+     below (no console error - Chart.js just never becomes available). -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <style>
   :root {
     --oxfam-green: #00693e;
@@ -186,6 +189,7 @@
 
   <div class="card">
     <h2>Quantités par catégorie / Hoeveelheden per categorie</h2>
+    <p id="categoryChartError" class="placeholder-msg" style="display:none;">Le graphique n'a pas pu se charger (bibliothèque indisponible). Réessayez de rafraîchir la page. / De grafiek kon niet geladen worden (bibliotheek niet beschikbaar). Probeer de pagina te vernieuwen.</p>
     <canvas id="categoryChart"></canvas>
   </div>
 
@@ -325,7 +329,14 @@ function renderChart(lines) {
   const data = labels.map(l => totals[l]);
 
   const ctx = document.getElementById('categoryChart');
-  if (!window.Chart) return;
+  const errorMsg = document.getElementById('categoryChartError');
+  if (!window.Chart) {
+    if (errorMsg) errorMsg.style.display = 'block';
+    if (ctx) ctx.style.display = 'none';
+    return;
+  }
+  if (errorMsg) errorMsg.style.display = 'none';
+  if (ctx) ctx.style.display = '';
   if (chartInstance) chartInstance.destroy();
   chartInstance = new Chart(ctx, {
     type: 'bar',
