@@ -80,6 +80,15 @@
   canvas { max-height: 320px; }
   .status-msg { font-size: 13px; color: #666; margin-bottom: 10px; }
   .action-link { display: block; color: var(--oxfam-green); font-weight: 600; text-decoration: none; font-size: 12px; margin-bottom: 4px; }
+  .confirm-banner {
+    background: #dff3e6; border: 1px solid #9fd8b6; color: #1e6b3a;
+    border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; font-size: 14px;
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  }
+  .confirm-banner button {
+    background: none; border: none; color: #1e6b3a; font-size: 18px; line-height: 1;
+    cursor: pointer; padding: 0 4px; flex-shrink: 0;
+  }
 </style>
 </head>
 <body>
@@ -96,6 +105,11 @@
 </header>
 
 <div class="wrap">
+
+  <div id="confirmBanner" class="confirm-banner" style="display:none;">
+    <span id="confirmBannerText"></span>
+    <button type="button" id="confirmBannerClose" aria-label="Fermer / Sluiten">&times;</button>
+  </div>
 
   <div class="card">
     <h2>Filtres / Filters</h2>
@@ -180,6 +194,38 @@
 <script>
 const SUPABASE_URL = 'https://ubqshzvbsqfekziyqxyc.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_jfEushP76J1NqW9LHeEb5A_8xNHAvba';
+
+// index.html redirects here with ?sent=1 (new order) or ?updated=1 (edit
+// saved) right after a successful submission, instead of relying on a toast
+// that disappears in a few seconds while the form page stays on screen
+// looking unchanged - shops reported that as looking like sending had
+// silently failed. Show a persistent banner instead, then strip the query
+// param so a later refresh of the dashboard doesn't keep re-showing it.
+(function showConfirmBannerFromQuery() {
+  const params = new URLSearchParams(window.location.search);
+  const banner = document.getElementById('confirmBanner');
+  const bannerText = document.getElementById('confirmBannerText');
+  let message = null;
+  if (params.has('sent')) {
+    message = 'Votre commande a bien été envoyée et enregistrée. / Uw bestelling werd succesvol verzonden en geregistreerd.';
+  } else if (params.has('updated')) {
+    message = 'Vos modifications ont bien été enregistrées. / Uw wijzigingen werden succesvol opgeslagen.';
+  }
+  if (message && banner && bannerText) {
+    bannerText.textContent = message;
+    banner.style.display = 'flex';
+    document.getElementById('confirmBannerClose').addEventListener('click', () => {
+      banner.style.display = 'none';
+    });
+  }
+  if (params.has('sent') || params.has('updated')) {
+    params.delete('sent');
+    params.delete('updated');
+    const newSearch = params.toString();
+    const newUrl = window.location.pathname + (newSearch ? `?${newSearch}` : '') + window.location.hash;
+    window.history.replaceState({}, '', newUrl);
+  }
+})();
 
 let allOrders = [];
 let allLines = [];

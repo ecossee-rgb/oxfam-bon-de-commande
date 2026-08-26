@@ -1280,7 +1280,12 @@ document.getElementById('btnSend').addEventListener('click', async () => {
     // passcode is verified server-side by the edit-order Edge Function.
     try {
       await logOrderToSupabase(editPasscode);
-      toast('Modifications enregistrées dans le suivi des commandes. / Wijzigingen opgeslagen in de bestelopvolging.');
+      // Success: leave the form and land on the tracking dashboard with a
+      // persistent confirmation banner, rather than a toast that disappears
+      // after a few seconds while the (still-filled-in) form stays on screen
+      // looking unchanged - that ambiguity is what prompted this redirect.
+      window.location.href = 'dashboard.html?updated=1';
+      return;
     } catch (e) {
       console.error(e);
       if (e.message === 'WRONG_PASSCODE') {
@@ -1364,7 +1369,12 @@ document.getElementById('btnSend').addEventListener('click', async () => {
 
   if (emailAttempted && dbOk) {
     logSecondaryFailures();
-    toast(`Bon de commande envoyé à ${EMAIL_TARGET} et enregistré dans le suivi des commandes. / Bestelbon verzonden naar ${EMAIL_TARGET} en geregistreerd in de bestelopvolging.` + infoSuffix() + shopSuffix());
+    // Full success: redirect to the tracking dashboard with a persistent
+    // confirmation banner instead of a toast that disappears after a few
+    // seconds while the form stays on screen looking untouched - shops
+    // reported that ambiguity made it look like sending had silently failed.
+    window.location.href = 'dashboard.html?sent=1';
+    return;
   } else if (emailAttempted && !dbOk) {
     console.error(outcomes.db.reason);
     logSecondaryFailures();
