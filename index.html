@@ -631,6 +631,14 @@ function fetchOdooStockRaw(category) {
   return odooStockRawCache[category];
 }
 
+// A couple of accessories aren't tracked as stock items in Odoo at all, but
+// shops order them often enough to be worth offering directly rather than
+// forcing a free-text workaround. Not linked to any real stock quantity.
+const MANUAL_ACCESSOIRE_OPTIONS = [
+  { value: 'Souris', label: 'Souris / Muis' },
+  { value: 'Clavier', label: 'Clavier / Toetsenbord' },
+];
+
 function ensureOdooStockLoaded(category) {
   if (!odooStockLoaded[category]) {
     odooStockLoaded[category] = fetchOdooStockRaw(category).then(items => {
@@ -643,6 +651,9 @@ function ensureOdooStockLoaded(category) {
         });
         if (odooStockMeta[category]) odooStockMeta[category][it.name] = it.osGroup || null;
       });
+      if (category === 'accessoire') {
+        MANUAL_ACCESSOIRE_OPTIONS.forEach(o => odooStockOptions[category].push(o));
+      }
     });
   }
   return odooStockLoaded[category];
