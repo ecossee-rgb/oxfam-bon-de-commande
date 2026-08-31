@@ -4,10 +4,19 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Préparation de commande - Bestelling klaarmaken | Oxfam Magasins du monde</title>
+<!-- Roboto: the body/UI typeface specified in the Oxfam brand book for web
+     and digital apps (T Star Pro, the brand's headline face, isn't an
+     open web font, so per the brand book's own guidance we lead with
+     Roboto online and fall back to Helvetica/Arial). -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&display=swap" rel="stylesheet">
 <style>
   :root {
-    --oxfam-green: #00693e;
-    --oxfam-dark: #00351f;
+    /* Official Oxfam brand palette (2021 brand book): AA-accessible green
+       for primary UI, the darker companion green for text/hover states. */
+    --oxfam-green: #44841A;
+    --oxfam-dark: #336114;
     --bg: #f4f6f5;
     --border: #d7ded9;
     --diff-bg: #fff3cd;
@@ -15,7 +24,7 @@
   }
   * { box-sizing: border-box; }
   body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    font-family: 'Roboto', Helvetica, Arial, sans-serif;
     background: var(--bg);
     margin: 0;
     padding: 0;
@@ -52,11 +61,11 @@
   .order-summary { font-size: 13px; color: #333; }
   .order-summary strong { color: var(--oxfam-dark); }
   .banner {
-    background: #eef5f1; border: 1px solid #cfe4d8; color: var(--oxfam-dark);
+    background: #f2f6ec; border: 1px solid #d9e5c9; color: var(--oxfam-dark);
     border-radius: 8px; padding: 10px 14px; margin-bottom: 16px; font-size: 13px;
   }
   .group-title {
-    background: #eef5f1; padding: 6px 10px; font-weight: 600; font-size: 13px;
+    background: #f2f6ec; padding: 6px 10px; font-weight: 600; font-size: 13px;
     color: var(--oxfam-dark); border-radius: 6px; margin: 14px 0 6px;
   }
   table.items { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 6px; }
@@ -75,7 +84,7 @@
   label { font-size: 13px; font-weight: 600; display: block; margin-bottom: 4px; color: #333; }
   input[type=text] { width: 100%; max-width: 320px; padding: 8px 10px; border: 1px solid #c7cfca; border-radius: 6px; font-size: 14px; font-family: inherit; }
   .actions { position: sticky; bottom: 0; background: white; border-top: 1px solid var(--border); padding: 14px 20px; display: flex; gap: 10px; justify-content: flex-end; max-width: 900px; margin: 0 auto; }
-  .btn { padding: 10px 18px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; border: none; }
+  .btn { padding: 10px 18px; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; border: none; text-transform: uppercase; letter-spacing: 0.4px; }
   .btn-primary { background: var(--oxfam-green); color: white; }
   .btn-primary:disabled { background: #9db8ac; cursor: not-allowed; }
   #toast { position: fixed; top: 16px; right: 16px; background: var(--oxfam-dark); color: white; padding: 10px 16px; border-radius: 8px; font-size: 13px; display: none; z-index: 999; max-width: 340px; }

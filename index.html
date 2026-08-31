@@ -16,10 +16,19 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/l10n/fr.js"></script>
+<!-- Roboto: the body/UI typeface specified in the Oxfam brand book for web
+     and digital apps (T Star Pro, the brand's headline face, isn't an
+     open web font, so per the brand book's own guidance we lead with
+     Roboto online and fall back to Helvetica/Arial). -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&display=swap" rel="stylesheet">
 <style>
   :root {
-    --oxfam-green: #00693e;
-    --oxfam-dark: #00351f;
+    /* Official Oxfam brand palette (2021 brand book): AA-accessible green
+       for primary UI, the darker companion green for text/hover states. */
+    --oxfam-green: #44841A;
+    --oxfam-dark: #336114;
     --bg: #f4f6f5;
     --border: #d7ded9;
     --red: #c0392b;
@@ -28,7 +37,7 @@
   }
   * { box-sizing: border-box; }
   body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    font-family: 'Roboto', Helvetica, Arial, sans-serif;
     background: var(--bg);
     margin: 0;
     padding: 0;
@@ -103,7 +112,7 @@
   table.items td.article-fr { font-weight: 500; }
   table.items td.article-nl { color: #666; font-style: italic; font-size: 12px; }
   table.items input[type=number] { width: 80px; }
-  .group-title { background: #eef5f1; padding: 6px 10px; font-weight: 600; font-size: 13px; color: var(--oxfam-dark); border-radius: 6px; margin: 14px 0 6px; }
+  .group-title { background: #f2f6ec; padding: 6px 10px; font-weight: 600; font-size: 13px; color: var(--oxfam-dark); border-radius: 6px; margin: 14px 0 6px; }
   .legend { font-size: 12px; margin: 6px 0 14px; padding: 8px 10px; background: #fff8e6; border: 1px solid #f0dca0; border-radius: 6px; }
   .legend span { display: inline-block; padding: 1px 8px; border-radius: 10px; color: white; font-size: 11px; margin-right: 6px; }
   .dot-red { background: var(--red); } .dot-yellow { background: var(--yellow); } .dot-green { background: var(--green2); }
@@ -114,16 +123,17 @@
   .color-dot.red { background: var(--red); } .color-dot.yellow { background: var(--yellow); } .color-dot.green { background: var(--green2); }
   .subtabs { display: none; }
   .subtabs.active { display: block; }
-  .info-note { font-size: 12px; color: #555; background: #f0f4f2; border-left: 3px solid var(--oxfam-green); padding: 6px 10px; margin-bottom: 10px; }
+  .info-note { font-size: 12px; color: #555; background: #f2f6ec; border-left: 3px solid var(--oxfam-green); padding: 6px 10px; margin-bottom: 10px; }
   .device-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 8px; }
   .device-table th { font-size: 10px; text-transform: uppercase; color: #666; padding: 4px; text-align:left; }
   .device-table td { padding: 3px; }
   .device-table input, .device-table select { padding: 5px 6px; font-size: 12px; }
-  .btn-add { background: #eef5f1; color: var(--oxfam-dark); border: 1px dashed var(--oxfam-green); border-radius: 6px; padding: 6px 12px; font-size: 12px; cursor: pointer; margin-bottom: 12px; }
+  .btn-add { background: #f2f6ec; color: var(--oxfam-dark); border: 1px dashed var(--oxfam-green); border-radius: 6px; padding: 6px 12px; font-size: 12px; cursor: pointer; margin-bottom: 12px; }
   .btn-remove { background: none; border: none; color: var(--red); cursor: pointer; font-size: 16px; line-height: 1; }
   .actions { position: sticky; bottom: 0; background: white; border-top: 1px solid var(--border); padding: 14px 20px; display: flex; gap: 10px; justify-content: flex-end; max-width: 900px; margin: 0 auto; }
   .btn {
-    padding: 10px 18px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; border: none;
+    padding: 10px 18px; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; border: none;
+    text-transform: uppercase; letter-spacing: 0.4px;
   }
   .btn-primary { background: var(--oxfam-green); color: white; }
   .btn-secondary { background: white; color: var(--oxfam-dark); border: 1px solid var(--oxfam-green); }

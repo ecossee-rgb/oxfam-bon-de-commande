@@ -8,16 +8,25 @@
      returning 503 for this exact file, which silently breaks the chart
      below (no console error - Chart.js just never becomes available). -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<!-- Roboto: the body/UI typeface specified in the Oxfam brand book for web
+     and digital apps (T Star Pro, the brand's headline face, isn't an
+     open web font, so per the brand book's own guidance we lead with
+     Roboto online and fall back to Helvetica/Arial). -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&display=swap" rel="stylesheet">
 <style>
   :root {
-    --oxfam-green: #00693e;
-    --oxfam-dark: #00351f;
+    /* Official Oxfam brand palette (2021 brand book): AA-accessible green
+       for primary UI, the darker companion green for text/hover states. */
+    --oxfam-green: #44841A;
+    --oxfam-dark: #336114;
     --bg: #f4f6f5;
     --border: #d7ded9;
   }
   * { box-sizing: border-box; }
   body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    font-family: 'Roboto', Helvetica, Arial, sans-serif;
     background: var(--bg);
     margin: 0;
     padding: 0;
@@ -57,10 +66,10 @@
   select, input[type=date] {
     width: 100%; padding: 7px 8px; border: 1px solid #c7cfca; border-radius: 6px; font-size: 13px; font-family: inherit;
   }
-  .btn { padding: 8px 16px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; border: none; background: var(--oxfam-green); color: white; }
+  .btn { padding: 8px 16px; border-radius: 6px; font-size: 12px; font-weight: 700; cursor: pointer; border: none; background: var(--oxfam-green); color: white; text-transform: uppercase; letter-spacing: 0.4px; }
   .btn-secondary { background: white; color: var(--oxfam-dark); border: 1px solid var(--oxfam-green); }
   .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; }
-  .kpi { background: #eef5f1; border-radius: 8px; padding: 14px 16px; text-align: center; }
+  .kpi { background: #f2f6ec; border-radius: 8px; padding: 14px 16px; text-align: center; }
   .kpi .value { font-size: 26px; font-weight: 700; color: var(--oxfam-dark); }
   .kpi .label { font-size: 12px; color: #556; margin-top: 4px; }
   table.report { width: 100%; border-collapse: collapse; font-size: 13px; }
