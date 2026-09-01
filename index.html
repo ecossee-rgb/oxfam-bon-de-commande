@@ -127,6 +127,11 @@
   .subtabs { display: none; }
   .subtabs.active { display: block; }
   .info-note { font-size: 12px; color: #555; background: #f2f6ec; border-left: 3px solid var(--oxfam-green); padding: 6px 10px; margin-bottom: 10px; }
+  .textile-note { display: flex; align-items: flex-start; gap: 10px; background: #d9e5c9; border: 1px solid var(--oxfam-green); border-left: 5px solid var(--oxfam-green); border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; }
+  .textile-note .textile-note-icon { font-size: 20px; line-height: 1; flex-shrink: 0; }
+  .textile-note .textile-note-text { flex: 1; font-size: 13px; color: var(--oxfam-dark); }
+  .textile-note .textile-note-text .fr { font-weight: 700; }
+  .textile-note .textile-note-text .nl { font-weight: 400; color: #3f5a2e; margin-top: 2px; }
   .device-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 8px; }
   .device-table th { font-size: 10px; text-transform: uppercase; color: #666; padding: 4px; text-align:left; }
   .device-table td { padding: 3px; }
@@ -643,7 +648,7 @@ function buildTextileCard(key, def) {
   if (TEXTILE_SECTION_KEYS.includes(key)) {
     const note = getTextileNote();
     if (note) {
-      card.appendChild(el('div', {class:'info-note', html: `${note.fr}<br>${note.nl}`}));
+      card.appendChild(el('div', {class:'textile-note', html: `<span class="textile-note-icon">📅</span><span class="textile-note-text"><div class="fr">${note.fr}</div><div class="nl">${note.nl}</div></span>`}));
     }
   }
   if (COLOR_CHECKBOX_SECTIONS.includes(key)) {
