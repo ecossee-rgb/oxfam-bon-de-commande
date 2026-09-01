@@ -487,6 +487,57 @@ function groupHasColorCheckboxes(sectionKey, groupTitle) {
   return COLOR_CHECKBOX_SECTIONS.includes(sectionKey) && /Vêtements & manteaux/.test(groupTitle);
 }
 
+// ---- Textile monthly disclaimer -------------------------------------
+// Shown as a note at the top of every textile ordering section (Crème,
+// Midmix, E5, Kg, Vintage) so shop managers know what to expect that
+// month (sales, top stock months, weaker months, etc.) — based on the
+// "Kalender van de textielwinkels" reference calendar.
+//
+// TO UPDATE FOR A SPECIFIC MONTH: just edit the fr/nl text below for
+// that month number (1 = January ... 12 = December).
+//
+// TO OVERRIDE WITH A ONE-OFF STOCK ALERT (e.g. "vestes en rupture cette
+// semaine"): set TEXTILE_STOCK_OVERRIDE below to {fr: '...', nl: '...'}
+// instead of null. While it is set, it replaces the monthly message on
+// ALL textile sections. Set it back to null to return to the normal
+// monthly calendar messages.
+const TEXTILE_STOCK_OVERRIDE = null;
+
+const TEXTILE_MONTHLY_NOTES = {
+  1: { fr: 'Janvier – Soldes : volume plus important attendu, qualité pas "top boutique", on écoule le stock et les surplus.',
+       nl: 'Januari – Solden: meer volume verwacht, kwaliteit niet topwinkel-niveau, we bouwen stock en overschotten af.' },
+  2: { fr: 'Février – Nouvelle collection + Carnaval : nouvelle collection en boutique, mise en avant du Carnaval, un mois plus calme à dynamiser.',
+       nl: 'Februari – Nieuwe collectie + Carnaval: nieuwe collectie in de winkel, Carnaval in de kijker, een zwakkere maand om te dynamiseren.' },
+  3: { fr: 'Mars – 1er mois fort du printemps/été : bonne quantité de stock attendue, focus sur les chaussures.',
+       nl: 'Maart – 1e topmaand lente/zomer: goede hoeveelheid stock, focus op schoenen.' },
+  4: { fr: 'Avril – 2e mois fort de l\'été : stock important, chaussures et vestes mieux valorisées.',
+       nl: 'April – 2e topmaand zomer: belangrijke stock, schoenen en jassen beter gevaloriseerd.' },
+  5: { fr: 'Mai – Dernier mois fort de l\'été : stock important, chaussures et vestes mieux valorisées.',
+       nl: 'Mei – Laatste topmaand zomer: belangrijke stock, schoenen en jassen beter gevaloriseerd.' },
+  6: { fr: 'Juin – Bon mois : volume un peu plus faible, réduction progressive du stock été.',
+       nl: 'Juni – Goede maand: iets minder volume, geleidelijke afbouw van de zomerstock.' },
+  7: { fr: 'Juillet – Soldes : volume plus important, qualité pas "top boutique", écoulement des surplus et articles démarqués.',
+       nl: 'Juli – Solden: meer volume, kwaliteit niet topwinkel, verkoop van overschotten en afgeprijsde stukken.' },
+  8: { fr: 'Août – Nouvelle collection + cartables : nouvelle collection été/automne, cartables mis en avant, on relance les ventes.',
+       nl: 'Augustus – Nieuwe collectie + schooltassen: nieuwe collectie zomer/herfst, schooltassen in de kijker, verkoop opnieuw stimuleren.' },
+  9: { fr: 'Septembre – 1er mois fort de l\'automne/hiver : bonne quantité de stock, rentrée scolaire et professionnelle.',
+       nl: 'September – 1e topmaand herfst/winter: goede hoeveelheid stock, terug naar school en werk.' },
+  10: { fr: 'Octobre – 2e mois fort de l\'automne/hiver : stock important, chaussures et vestes mieux valorisées.',
+        nl: 'Oktober – 2e topmaand herfst/winter: belangrijke stock, schoenen en jassen beter gevaloriseerd.' },
+  11: { fr: 'Novembre – Dernier mois fort de l\'hiver : stock important, chaussures et vestes mieux valorisées.',
+        nl: 'November – Laatste topmaand winter: belangrijke stock, schoenen en jassen beter gevaloriseerd.' },
+  12: { fr: 'Décembre – Bon mois + tenues de fête : volume un peu plus faible, tenues de fête mises en avant, focus sur les cadeaux (sacs à main, écharpes, bonnets).',
+        nl: 'December – Goede maand + feestkleding: iets minder volume, feestkleding in de kijker, focus op cadeaus: handtassen, sjaals, mutsen.' }
+};
+
+const TEXTILE_SECTION_KEYS = ['textileCreme', 'textileMidmix', 'textileE5', 'textileKg', 'textileVintage'];
+
+function getTextileNote() {
+  if (TEXTILE_STOCK_OVERRIDE) return TEXTILE_STOCK_OVERRIDE;
+  const month = new Date().getMonth() + 1;
+  return TEXTILE_MONTHLY_NOTES[month] || null;
+}
+
 function buildQtyTable(sectionKey, groups, opts) {
   const collapsible = !!(opts && opts.collapsible);
   const container = document.createElement('div');
@@ -589,6 +640,12 @@ function buildSimpleQtyCard(key, title, sheetName, items, note) {
 function buildTextileCard(key, def) {
   const card = el('div', {class:'card', id:`card__${key}`});
   card.appendChild(el('h2', {text: def.label}));
+  if (TEXTILE_SECTION_KEYS.includes(key)) {
+    const note = getTextileNote();
+    if (note) {
+      card.appendChild(el('div', {class:'info-note', html: `${note.fr}<br>${note.nl}`}));
+    }
+  }
   if (COLOR_CHECKBOX_SECTIONS.includes(key)) {
     card.appendChild(el('div', {class:'legend', html: 'Rappel : indiquez la quantité commandée par catégorie <span class="dot-red">rouge</span><span class="dot-yellow">jaune</span><span class="dot-green">vert</span> Yunus pour les vêtements &amp; manteaux. / Geef het bestelde aantal per Yunus-categorie <span class="dot-red">rood</span><span class="dot-yellow">geel</span><span class="dot-green">groen</span> op voor kleding &amp; jassen.'}));
   }
