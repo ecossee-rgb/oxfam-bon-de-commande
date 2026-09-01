@@ -648,7 +648,7 @@ function buildTextileCard(key, def) {
   if (TEXTILE_SECTION_KEYS.includes(key)) {
     const note = getTextileNote();
     if (note) {
-      card.appendChild(el('div', {class:'textile-note', html: `<span class="textile-note-icon">📅</span><span class="textile-note-text"><div class="fr">${note.fr}</div><div class="nl">${note.nl}</div></span>`}));
+      card.appendChild(el('div', {class:'textile-note', html: `<span class="textile-note-icon">🗓️</span><span class="textile-note-text"><div class="fr">${note.fr}</div><div class="nl">${note.nl}</div></span>`}));
     }
   }
   if (COLOR_CHECKBOX_SECTIONS.includes(key)) {
