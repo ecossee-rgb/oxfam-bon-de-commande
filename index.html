@@ -963,7 +963,10 @@ function collectQtyRows(prefix, def) {
   function pushRow(id, item) {
     const colors = colorQtysFor(id);
     if (colors) {
-      if (colors.red || colors.yellow || colors.green) {
+      // parseFloat check (not a plain truthy check) so an explicit "0" is
+      // treated the same as an empty field - only genuinely non-zero
+      // quantities keep the row in the recap.
+      if (parseFloat(colors.red) || parseFloat(colors.yellow) || parseFloat(colors.green)) {
         rows.push(isColorSection
           ? [item[0], item[1], '', '', colors.red, colors.yellow, colors.green]
           : [item[0], item[1], '', '']);
@@ -971,7 +974,7 @@ function collectQtyRows(prefix, def) {
     } else {
       const v = document.getElementById(id);
       const qty = v ? v.value : '';
-      if (qty) rows.push(isColorSection ? [item[0], item[1], qty, ''] : [item[0], item[1], qty, '']);
+      if (parseFloat(qty)) rows.push(isColorSection ? [item[0], item[1], qty, ''] : [item[0], item[1], qty, '']);
     }
   }
   if (def.groups) {
@@ -991,6 +994,7 @@ function collectQtyRows(prefix, def) {
 function collectDeviceRows(prefix, columns) {
   const tbody = document.getElementById(`${prefix}__tbody`);
   if (!tbody) return [];
+  const qtyIdx = columns.findIndex(c => c.key === 'commande');
   const rows = [];
   Array.from(tbody.children).forEach(tr => {
     const idx = tr.getAttribute('data-idx');
@@ -998,6 +1002,10 @@ function collectDeviceRows(prefix, columns) {
       const inp = document.getElementById(`${prefix}__${c.key}__${idx}`);
       return inp ? inp.value : '';
     });
+    // A row whose "Commandé" quantity is explicitly 0 is treated the same
+    // as an empty field - it shouldn't appear in the recap even if a
+    // model/OS was picked.
+    if (qtyIdx !== -1 && parseFloat(rowVals[qtyIdx]) === 0) return;
     if (rowVals.some(v => v && v.trim() !== '')) rows.push(rowVals);
   });
   return rows;
