@@ -111,6 +111,11 @@
   table.items td { padding: 5px 8px; border-bottom: 1px solid #eee; vertical-align: middle; }
   table.items td.article-fr { font-weight: 500; }
   table.items td.article-nl { color: #666; font-style: italic; font-size: 12px; }
+  /* Region-based language filtering: a Wallonia store hides the Dutch
+     article name/UI text, a Flanders store hides the French one. Brussels
+     (or an unclassified store) keeps both, same as before. */
+  body.lang-fr .article-nl { display: none; }
+  body.lang-nl .article-fr { display: none; }
   table.items input[type=number] { width: 80px; }
   .group-title { background: #f2f6ec; padding: 6px 10px; font-weight: 600; font-size: 13px; color: var(--oxfam-dark); border-radius: 6px; margin: 14px 0 6px; }
   .group-title.collapsible { cursor: pointer; display: flex; align-items: center; justify-content: space-between; user-select: none; }
@@ -168,9 +173,9 @@
   <div style="display:flex; align-items:center; gap:16px; flex-wrap:wrap;">
     <img src="./logo-oxfam.png" alt="Oxfam" style="height:56px; width:auto; background:white; border-radius:8px; padding:4px;">
     <div>
-      <h1>Bon de commande - Bestelbon</h1>
-      <p>A envoyer au moins 3 jours ouvrables avant la date de livraison souhaitée. / Op te sturen ten minste 3 werkdagen v&oacute;&oacute;r de gewenste leverdatum.</p>
-      <p><a href="./dashboard.html" style="color:white;">Voir le suivi de toutes les commandes / Bekijk de opvolging van alle bestellingen &rarr;</a></p>
+      <h1 id="mainTitle">Bon de commande - Bestelbon</h1>
+      <p id="mainSubtitle">A envoyer au moins 3 jours ouvrables avant la date de livraison souhaitée. / Op te sturen ten minste 3 werkdagen v&oacute;&oacute;r de gewenste leverdatum.</p>
+      <p><a href="./dashboard.html" id="dashboardLink" style="color:white;">Voir le suivi de toutes les commandes / Bekijk de opvolging van alle bestellingen &rarr;</a></p>
     </div>
   </div>
 </header>
@@ -180,91 +185,91 @@
   <div id="editBanner" style="display:none; background:#fff3cd; border:1px solid #ffe08a; color:#664d03; border-radius:8px; padding:12px 16px; margin-bottom:16px; font-size:13px;"></div>
 
   <div class="card" id="card1">
-    <h2>1. Magasin &amp; livraison / Winkel &amp; levering</h2>
+    <h2><span class="h2-text" id="card1Title">1. Magasin &amp; livraison / Winkel &amp; levering</span></h2>
     <div class="row2">
       <div class="field">
-        <label>Nom du magasin / Naam winkel</label>
+        <label id="lblStoreName">Nom du magasin / Naam winkel</label>
         <select id="storeName"><option value="">-- Choisissez votre magasin --</option></select>
       </div>
       <div class="field">
-        <label>Date de livraison / Leveringsdatum</label>
+        <label id="lblDeliveryDate">Date de livraison / Leveringsdatum</label>
         <input type="text" id="deliveryDate" placeholder="jj/mm/aaaa" autocomplete="off">
         <p class="hint" id="deliveryDateHint"></p>
       </div>
     </div>
-    <p class="hint">Les onglets ci-dessous s'adaptent automatiquement &agrave; votre magasin, comme dans le fichier Excel d'origine. / De onderstaande tabbladen passen zich automatisch aan uw winkel aan, net als in het oorspronkelijke Excel-bestand.</p>
+    <p class="hint" id="hintTabsAdapt">Les onglets ci-dessous s'adaptent automatiquement &agrave; votre magasin, comme dans le fichier Excel d'origine. / De onderstaande tabbladen passen zich automatisch aan uw winkel aan, net als in het oorspronkelijke Excel-bestand.</p>
   </div>
 
   <div class="card" id="card2">
-    <h2>2. Logistique / Logistiek</h2>
+    <h2><span class="h2-text" id="card2Title">2. Logistique / Logistiek</span></h2>
 
     <div class="field">
-      <label>Je veux une livraison / Ik wil een levering <span style="color:#c0392b">*</span></label>
+      <label id="lblWantDelivery">Je veux une livraison / Ik wil een levering <span style="color:#c0392b">*</span></label>
       <div class="radio-group">
-        <label><input type="radio" name="wantDelivery" value="oui"> Oui / Ja</label>
-        <label><input type="radio" name="wantDelivery" value="non"> Non / Neen</label>
+        <label><input type="radio" name="wantDelivery" value="oui"> <span class="lang-oui">Oui / Ja</span></label>
+        <label><input type="radio" name="wantDelivery" value="non"> <span class="lang-non">Non / Neen</span></label>
       </div>
     </div>
 
     <div class="field">
-      <label>Je veux un transfert / Ik wil een transfert</label>
+      <label id="lblWantTransfer">Je veux un transfert / Ik wil een transfert</label>
       <div class="radio-group">
-        <label><input type="radio" name="wantTransfer" value="oui"> Oui / Ja</label>
-        <label><input type="radio" name="wantTransfer" value="non"> Non / Neen</label>
+        <label><input type="radio" name="wantTransfer" value="oui"> <span class="lang-oui">Oui / Ja</span></label>
+        <label><input type="radio" name="wantTransfer" value="non"> <span class="lang-non">Non / Neen</span></label>
       </div>
-      <p class="hint">Ne pas oublier de coller une étiquette transfert svp / Niet vergeten een transfert etiket op te kleven.</p>
+      <p class="hint" id="hintTransfer">Ne pas oublier de coller une étiquette transfert svp / Niet vergeten een transfert etiket op te kleven.</p>
     </div>
 
     <div class="field">
-      <label>Je veux un retour / Ik wil een terugkeer</label>
+      <label id="lblWantReturn">Je veux un retour / Ik wil een terugkeer</label>
       <div class="radio-group">
-        <label><input type="radio" name="wantReturn" value="oui"> Oui / Ja</label>
-        <label><input type="radio" name="wantReturn" value="non"> Non / Neen</label>
+        <label><input type="radio" name="wantReturn" value="oui"> <span class="lang-oui">Oui / Ja</span></label>
+        <label><input type="radio" name="wantReturn" value="non"> <span class="lang-non">Non / Neen</span></label>
       </div>
-      <p class="hint">1 chariot = 12 sacs / 1 rolkar = 12 zakken</p>
+      <p class="hint" id="hintChariot">1 chariot = 12 sacs / 1 rolkar = 12 zakken</p>
     </div>
 
     <div class="field">
       <div class="qty-list">
         <div class="qty-row">
-          <span class="qty-row-label">N° de chariots pour retour à Yunus / Aantal rolkarren</span>
+          <span class="qty-row-label" id="lblNbChariots">N° de chariots pour retour à Yunus / Aantal rolkarren</span>
           <input type="number" min="0" id="nbChariots" class="qty-input">
         </div>
         <div class="qty-row">
-          <span class="qty-row-label">N° de bacs de réparations IT / Aantal bakken reparaties IT (transport de valeur !)</span>
+          <span class="qty-row-label" id="lblNbBacsIT">N° de bacs de réparations IT / Aantal bakken reparaties IT (transport de valeur !)</span>
           <input type="number" min="0" id="nbBacsIT" class="qty-input">
         </div>
         <div class="qty-row">
-          <span class="qty-row-label">N° de sacs avec de la petite monnaie / Aantal zakken kleingeld</span>
+          <span class="qty-row-label" id="lblNbSacsMonnaie">N° de sacs avec de la petite monnaie / Aantal zakken kleingeld</span>
           <input type="number" min="0" id="nbSacsMonnaie" class="qty-input">
         </div>
         <div class="qty-row">
-          <span class="qty-row-label">Cartons vides pour livres commandés / Kartonnen dozen voor boeken besteld</span>
+          <span class="qty-row-label" id="lblNbCartonsLivres">Cartons vides pour livres commandés / Kartonnen dozen voor boeken besteld</span>
           <input type="number" min="0" id="nbCartonsLivres" class="qty-input">
         </div>
         <div class="qty-row">
-          <span class="qty-row-label">Bacs jaunes pour déchets commandés / Gele bakken voor afval besteld</span>
+          <span class="qty-row-label" id="lblNbBacsJaunes">Bacs jaunes pour déchets commandés / Gele bakken voor afval besteld</span>
           <input type="number" min="0" id="nbBacsJaunes" class="qty-input">
         </div>
       </div>
     </div>
 
     <div class="field" id="bacsITReasonWrap" style="display:none;">
-      <p class="hint" style="margin:0 0 6px; color:#8a2f2f;">Merci de vérifier que les articles sont correctement emballés et d'indiquer la raison du retour : / Gelieve na te gaan of de artikelen goed verpakt zijn en de reden van de terugkeer op te geven:</p>
+      <p class="hint" id="hintBacsITReason" style="margin:0 0 6px; color:#8a2f2f;">Merci de vérifier que les articles sont correctement emballés et d'indiquer la raison du retour : / Gelieve na te gaan of de artikelen goed verpakt zijn en de reden van de terugkeer op te geven:</p>
       <textarea id="bacsITReason" placeholder="Raison du retour / Reden van de terugkeer"></textarea>
     </div>
 
     <div class="checkline">
       <input type="checkbox" id="fardeCompta">
-      <label for="fardeCompta">Farde avec la compta jointe / Map met boekhouding bijgevoegd</label>
+      <label for="fardeCompta" id="lblFardeCompta">Farde avec la compta jointe / Map met boekhouding bijgevoegd</label>
     </div>
     <div class="checkline">
       <input type="checkbox" id="vidangeOFT">
-      <label for="vidangeOFT">Vidange produits OFT / Leeggoed producten OFT</label>
+      <label for="vidangeOFT" id="lblVidangeOFT">Vidange produits OFT / Leeggoed producten OFT</label>
     </div>
 
     <div class="field">
-      <label>Autres / remarques - Andere / opmerkingen</label>
+      <label id="lblLogistiqueRemarques">Autres / remarques - Andere / opmerkingen</label>
       <textarea id="logistiqueRemarques"></textarea>
     </div>
   </div>
@@ -272,7 +277,7 @@
   <div id="dynamicSections"></div>
 
   <div id="noSectionsMsg" class="card" style="display:none;">
-    <p class="placeholder-msg">Choisissez votre magasin ci-dessus pour afficher les onglets qui le concernent (textile, books &amp; broc, &eacute;conomat, informatique). / Kies hierboven uw winkel om de tabbladen te tonen die op u van toepassing zijn (textiel, books &amp; broc, economaat, informatica).</p>
+    <p class="placeholder-msg" id="noSectionsText">Choisissez votre magasin ci-dessus pour afficher les onglets qui le concernent (textile, books &amp; broc, &eacute;conomat, informatique). / Kies hierboven uw winkel om de tabbladen te tonen die op u van toepassing zijn (textiel, books &amp; broc, economaat, informatica).</p>
   </div>
 
 </div>
@@ -294,6 +299,114 @@ Object.keys(DATA.stores).sort().forEach(name => {
   opt.value = name; opt.textContent = name;
   storeSelect.appendChild(opt);
 });
+
+// ---- Region-based language filtering ---------------------------------
+// Wallonia shops see French only, Flanders shops see Dutch only, and
+// Brussels shops (or any store not classified below) keep seeing both
+// languages, exactly like before. Derived from "shop emails.xlsx" (each
+// shop's full name/mailbox names its city or commune).
+const STORE_REGION = {
+  'Bookshop Antwerpen': 'vl', 'Bookshop Gent': 'vl', 'Bookshop Kortrijk': 'vl', 'Bookshop Leuven': 'vl',
+  'Boutique Antwerpen': 'vl', 'Shop Aalst Lange Zoutstraat': 'vl', 'Shop Antwerpen Lange Koertpoortstraat': 'vl',
+  'Shop Brugge': 'vl', 'Shop Gent Steendam': 'vl', 'Shop Halle Volpestraat': 'vl', 'Shop Knokke-Heist': 'vl',
+  'Shop Leuven Diestsestraat': 'vl', 'Shop Mechelen': 'vl', 'Shop Oostende': 'vl', 'Shop Vilvoorde Leuvensestraat': 'vl',
+  'Shop Wilrijk': 'vl',
+
+  'Bookshop Liège': 'wa', 'Bookshop Namur': 'wa', 'Computer & Bookshop Mons': 'wa', 'RE.BEL Féronstrée': 'wa',
+  'Shop Casquette': 'wa', 'Shop Charleroi rue de la Montagne': 'wa', 'Shop Ciney': 'wa', 'Shop Dinant': 'wa',
+  'Shop Fléron': 'wa', 'Shop Herstal Laixheau': 'wa', 'Shop Herstal Zénobe-Gramme': 'wa', 'Shop Marcinelle': 'wa',
+  'Shop Mons Textile': 'wa', 'Shop Namur Bomel': 'wa', 'Shop Nivelles': 'wa', 'Shop Outre-Meuse': 'wa',
+
+  'Bookshop Ixelles': 'bxl', 'Bookshop Uccle': 'bxl', 'Computershop Ixelles': 'bxl', 'Shop Belgica': 'bxl',
+  'Shop Brabançonne': 'bxl', 'Shop Etterbeek': 'bxl', 'Shop Marolles': 'bxl', 'Shop Vintage': 'bxl'
+};
+function langFor(store) {
+  const region = STORE_REGION[store];
+  if (region === 'vl') return 'nl';
+  if (region === 'wa') return 'fr';
+  return 'both'; // Brussels, or a store not (yet) classified
+}
+let currentLang = 'both';
+// Any element carrying a matching id in STATIC_BILINGUAL_TEXT (see below)
+// gets its text/placeholder updated here too, so the static parts of the
+// page (title, field labels, buttons...) follow the same language as the
+// store-dependent sections built in JS.
+function updateLangForStore() {
+  currentLang = langFor(storeSelect.value);
+  document.body.classList.remove('lang-fr', 'lang-nl', 'lang-both');
+  document.body.classList.add('lang-' + currentLang);
+  applyStaticLangText();
+}
+// Returns fr-only / nl-only / the bilingual text depending on currentLang.
+// "both" lets a call site give the EXACT original combined wording when it
+// isn't a plain "fr / nl" concatenation (e.g. a different separator, or
+// text that already reads the same in both languages) - if omitted, the
+// bilingual fallback is `${fr} / ${nl}`.
+function bi(fr, nl, both) {
+  if (currentLang === 'fr') return fr;
+  if (currentLang === 'nl') return nl;
+  return both !== undefined ? both : `${fr} / ${nl}`;
+}
+
+// Static (non-JS-rebuilt) page text that needs to follow the region
+// language too: title, section headers, field/radio/checkbox labels,
+// hints, buttons. Dynamic sections (textile/économat/informatique cards)
+// are rebuilt fresh by renderSections() so they use bi() directly instead.
+function setText(id, text) {
+  const elm = document.getElementById(id);
+  if (elm) elm.textContent = text;
+}
+function applyStaticLangText() {
+  setText('mainTitle', bi('Bon de commande', 'Bestelbon', 'Bon de commande - Bestelbon'));
+  setText('mainSubtitle', bi(
+    'A envoyer au moins 3 jours ouvrables avant la date de livraison souhaitée.',
+    'Op te sturen ten minste 3 werkdagen vóór de gewenste leverdatum.'
+  ));
+  setText('dashboardLink', bi('Voir le suivi de toutes les commandes →', 'Bekijk de opvolging van alle bestellingen →', 'Voir le suivi de toutes les commandes / Bekijk de opvolging van alle bestellingen →'));
+  setText('card1Title', bi('1. Magasin & livraison', '1. Winkel & levering', '1. Magasin & livraison / Winkel & levering'));
+  setText('lblStoreName', bi('Nom du magasin', 'Naam winkel'));
+  setText('lblDeliveryDate', bi('Date de livraison', 'Leveringsdatum'));
+  setText('hintTabsAdapt', bi(
+    "Les onglets ci-dessous s'adaptent automatiquement à votre magasin, comme dans le fichier Excel d'origine.",
+    'De onderstaande tabbladen passen zich automatisch aan uw winkel aan, net als in het oorspronkelijke Excel-bestand.'
+  ));
+  setText('card2Title', bi('2. Logistique', '2. Logistiek', '2. Logistique / Logistiek'));
+  document.querySelectorAll('.lang-oui').forEach(e => e.textContent = bi('Oui', 'Ja'));
+  document.querySelectorAll('.lang-non').forEach(e => e.textContent = bi('Non', 'Neen'));
+  const lblWantDelivery = document.getElementById('lblWantDelivery');
+  if (lblWantDelivery) lblWantDelivery.firstChild.textContent = bi('Je veux une livraison ', 'Ik wil een levering ', 'Je veux une livraison / Ik wil een levering ');
+  setText('lblWantTransfer', bi('Je veux un transfert', 'Ik wil een transfert'));
+  setText('hintTransfer', bi(
+    'Ne pas oublier de coller une étiquette transfert svp',
+    'Niet vergeten een transfert etiket op te kleven.',
+    'Ne pas oublier de coller une étiquette transfert svp / Niet vergeten een transfert etiket op te kleven.'
+  ));
+  setText('lblWantReturn', bi('Je veux un retour', 'Ik wil een terugkeer'));
+  setText('hintChariot', bi('1 chariot = 12 sacs', '1 rolkar = 12 zakken'));
+  setText('lblNbChariots', bi('N° de chariots pour retour à Yunus', 'Aantal rolkarren'));
+  setText('lblNbBacsIT', bi('N° de bacs de réparations IT (transport de valeur !)', 'Aantal bakken reparaties IT (transport de valeur !)', 'N° de bacs de réparations IT / Aantal bakken reparaties IT (transport de valeur !)'));
+  setText('lblNbSacsMonnaie', bi('N° de sacs avec de la petite monnaie', 'Aantal zakken kleingeld'));
+  setText('lblNbCartonsLivres', bi('Cartons vides pour livres commandés', 'Kartonnen dozen voor boeken besteld'));
+  setText('lblNbBacsJaunes', bi('Bacs jaunes pour déchets commandés', 'Gele bakken voor afval besteld'));
+  setText('hintBacsITReason', bi(
+    'Merci de vérifier que les articles sont correctement emballés et d\'indiquer la raison du retour :',
+    'Gelieve na te gaan of de artikelen goed verpakt zijn en de reden van de terugkeer op te geven:'
+  ));
+  const bacsITReasonEl = document.getElementById('bacsITReason');
+  if (bacsITReasonEl) bacsITReasonEl.placeholder = bi('Raison du retour', 'Reden van de terugkeer');
+  setText('lblFardeCompta', bi('Farde avec la compta jointe', 'Map met boekhouding bijgevoegd'));
+  setText('lblVidangeOFT', bi('Vidange produits OFT', 'Leeggoed producten OFT'));
+  setText('lblLogistiqueRemarques', bi('Autres / remarques', 'Andere / opmerkingen', 'Autres / remarques - Andere / opmerkingen'));
+  setText('noSectionsText', bi(
+    'Choisissez votre magasin ci-dessus pour afficher les onglets qui le concernent (textile, books & broc, économat, informatique).',
+    'Kies hierboven uw winkel om de tabbladen te tonen die op u van toepassing zijn (textiel, books & broc, economaat, informatica).'
+  ));
+  setText('btnReset', bi('Réinitialiser', 'Reset'));
+  setText('btnExport', bi('Télécharger une copie (.xlsx)', 'Kopie downloaden (.xlsx)'));
+  // btnSend's text is also overwritten by bootstrapEditMode() for the
+  // loading/edit-mode states - that happens after this, so it always wins.
+  if (!window.__editOrderId) setText('btnSend', bi('Envoyer le bon de commande par email', 'Bestelbon per e-mail versturen'));
+}
 
 // Which weekday(s) each shop's delivery round passes by, from the internal
 // "tournées" planning file (1 = lundi/maandag ... 5 = vendredi/vrijdag).
@@ -387,24 +500,40 @@ function isDeliveryDateValid(dateStr, store) {
 }
 function deliveryDateErrorMessage(store) {
   const days = store ? getAllowedWeekdays(store) : null;
+  const lang = langFor(store);
   if (days) {
     const { fr, nl } = formatAllowedDays(days);
-    return `La date de livraison doit correspondre au jour de tournée de votre magasin (${fr}), et être au moins 3 jours ouvrables après aujourd'hui (à partir du ${formatDateHuman(MIN_DELIVERY_DATE)}). / De leveringsdatum moet overeenkomen met de rondedag van uw winkel (${nl}), en minstens 3 werkdagen na vandaag zijn (vanaf ${formatDateHuman(MIN_DELIVERY_DATE)}).`;
+    const frText = `La date de livraison doit correspondre au jour de tournée de votre magasin (${fr}), et être au moins 3 jours ouvrables après aujourd'hui (à partir du ${formatDateHuman(MIN_DELIVERY_DATE)}).`;
+    const nlText = `De leveringsdatum moet overeenkomen met de rondedag van uw winkel (${nl}), en minstens 3 werkdagen na vandaag zijn (vanaf ${formatDateHuman(MIN_DELIVERY_DATE)}).`;
+    if (lang === 'fr') return frText;
+    if (lang === 'nl') return nlText;
+    return `${frText} / ${nlText}`;
   }
-  return `La date de livraison doit être un jour ouvrable (lundi-vendredi), au moins 3 jours ouvrables après aujourd'hui (à partir du ${formatDateHuman(MIN_DELIVERY_DATE)}). / De leveringsdatum moet een werkdag zijn (maandag-vrijdag), minstens 3 werkdagen na vandaag (vanaf ${formatDateHuman(MIN_DELIVERY_DATE)}).`;
+  const frText2 = `La date de livraison doit être un jour ouvrable (lundi-vendredi), au moins 3 jours ouvrables après aujourd'hui (à partir du ${formatDateHuman(MIN_DELIVERY_DATE)}).`;
+  const nlText2 = `De leveringsdatum moet een werkdag zijn (maandag-vrijdag), minstens 3 werkdagen na vandaag (vanaf ${formatDateHuman(MIN_DELIVERY_DATE)}).`;
+  if (lang === 'fr') return frText2;
+  if (lang === 'nl') return nlText2;
+  return `${frText2} / ${nlText2}`;
 }
 const deliveryDateInput = document.getElementById('deliveryDate');
 const deliveryDateHint = document.getElementById('deliveryDateHint');
 function updateDeliveryDateHint() {
+  updateLangForStore();
   if (!deliveryDateHint) return;
   const humanDate = formatDateHuman(MIN_DELIVERY_DATE);
   const store = storeSelect.value;
   const days = store ? getAllowedWeekdays(store) : null;
   if (days) {
     const { fr, nl } = formatAllowedDays(days);
-    deliveryDateHint.textContent = `Votre magasin est livré le : ${fr} (à partir du ${humanDate} au plus tôt). Les autres jours sont grisés dans le calendrier. / Uw winkel wordt beleverd op: ${nl} (ten vroegste vanaf ${humanDate}). De andere dagen zijn grijs in de kalender.`;
+    deliveryDateHint.textContent = bi(
+      `Votre magasin est livré le : ${fr} (à partir du ${humanDate} au plus tôt). Les autres jours sont grisés dans le calendrier.`,
+      `Uw winkel wordt beleverd op: ${nl} (ten vroegste vanaf ${humanDate}). De andere dagen zijn grijs in de kalender.`
+    );
   } else {
-    deliveryDateHint.textContent = `Date la plus proche possible : ${humanDate} (minimum 3 jours ouvrables, week-ends exclus). Choisissez d'abord votre magasin pour voir ses jours de livraison. / Vroegst mogelijke datum: ${humanDate} (minimum 3 werkdagen, weekends uitgesloten). Kies eerst uw winkel om de leverdagen te zien.`;
+    deliveryDateHint.textContent = bi(
+      `Date la plus proche possible : ${humanDate} (minimum 3 jours ouvrables, week-ends exclus). Choisissez d'abord votre magasin pour voir ses jours de livraison.`,
+      `Vroegst mogelijke datum: ${humanDate} (minimum 3 werkdagen, weekends uitgesloten). Kies eerst uw winkel om de leverdagen te zien.`
+    );
   }
 }
 // Builds the flatpickr "disable" predicate for the currently selected shop:
@@ -470,6 +599,36 @@ if (nbBacsITInput) {
 }
 
 const dynamicSections = document.getElementById('dynamicSections');
+
+// DATA.textileSheets/economat labels are already combined "FR - NL" (or
+// "FR/NL - FR/NL"). Split once here so buildTextileCard can show just the
+// relevant language while keeping the exact original string for "both".
+const SECTION_LABELS = {
+  textileCreme: { fr: 'Textile CRÈME', nl: 'Textiel CRÈME' },
+  textileMidmix: { fr: 'Textile MIDMIX', nl: 'Textiel MIDMIX' },
+  textileE5: { fr: 'Textile E5-CONTAINER', nl: 'Textiel E5-CONTAINER' },
+  textileKg: { fr: 'Textile AU KG', nl: 'Textiel PER KG' },
+  textileVintage: { fr: 'Textile VINTAGE', nl: 'Textiel VINTAGE' },
+  economat: { fr: 'Économat/Marketing', nl: 'Economaat/Marketing' }
+};
+
+// Group titles (e.g. "Vêtements & manteaux / Kleding & jassen") are "FR /
+// NL" (or a single term when identical in both languages) - split at the
+// first " / ". One title has a French-only size annotation baked into the
+// Dutch half in the source data; keep that duplicate untranslated on both
+// sides rather than inventing a Dutch phrase that isn't in the original.
+const GROUP_TITLE_OVERRIDES = {
+  'Sacs en plastique / Plastieken zakken (boîtes de 25 rouleaux x 20 sacs)': {
+    fr: 'Sacs en plastique (boîtes de 25 rouleaux x 20 sacs)',
+    nl: 'Plastieken zakken (boîtes de 25 rouleaux x 20 sacs)'
+  }
+};
+function splitGroupTitle(title) {
+  if (GROUP_TITLE_OVERRIDES[title]) return GROUP_TITLE_OVERRIDES[title];
+  const idx = title.indexOf(' / ');
+  if (idx === -1) return { fr: title, nl: title };
+  return { fr: title.slice(0, idx), nl: title.slice(idx + 3) };
+}
 
 function el(tag, attrs, children) {
   const e = document.createElement(tag);
@@ -551,7 +710,8 @@ function buildQtyTable(sectionKey, groups, opts) {
     const groupTitleClass = collapsible ? 'group-title collapsible' : 'group-title';
     const titleEl = el('div', {class: groupTitleClass});
     const titleText = document.createElement('span');
-    titleText.textContent = g.title;
+    const gt = splitGroupTitle(g.title);
+    titleText.textContent = bi(gt.fr, gt.nl, g.title);
     titleEl.appendChild(titleText);
     let chevron = null;
     if (collapsible) {
@@ -562,15 +722,15 @@ function buildQtyTable(sectionKey, groups, opts) {
     }
     container.appendChild(titleEl);
     const table = el('table', {class:'items'});
-    const headerCells = [el('th', {text:'Article (FR / NL)'})];
+    const headerCells = [el('th', {text: bi('Article', 'Artikel', 'Article (FR / NL)')})];
     if (showColors) {
       // Colored items are ordered per Yunus price category, so each item
       // gets 3 separate quantity fields instead of one combined field.
-      headerCells.push(el('th', {class:'color-th', html:'<span class="color-dot red"></span>Rouge / Rood'}));
-      headerCells.push(el('th', {class:'color-th', html:'<span class="color-dot yellow"></span>Jaune / Geel'}));
-      headerCells.push(el('th', {class:'color-th', html:'<span class="color-dot green"></span>Vert / Groen'}));
+      headerCells.push(el('th', {class:'color-th', html:`<span class="color-dot red"></span>${bi('Rouge','Rood')}`}));
+      headerCells.push(el('th', {class:'color-th', html:`<span class="color-dot yellow"></span>${bi('Jaune','Geel')}`}));
+      headerCells.push(el('th', {class:'color-th', html:`<span class="color-dot green"></span>${bi('Vert','Groen')}`}));
     } else {
-      headerCells.push(el('th', {text:'Commandé / Besteld'}));
+      headerCells.push(el('th', {text: bi('Commandé','Besteld')}));
     }
     const thead = el('thead', {}, [el('tr', {}, headerCells)]);
     table.appendChild(thead);
@@ -617,8 +777,8 @@ function buildSimpleQtyCard(key, title, sheetName, items, note) {
   if (note) card.appendChild(el('div', {class:'info-note', html: note}));
   const table = el('table', {class:'items'});
   table.appendChild(el('thead', {}, [el('tr', {}, [
-    el('th', {text:'Article (FR / NL)'}),
-    el('th', {text:'Commandé / Besteld'})
+    el('th', {text: bi('Article', 'Artikel', 'Article (FR / NL)')}),
+    el('th', {text: bi('Commandé','Besteld')})
   ])]));
   const tbody = el('tbody');
   items.forEach((item, ii) => {
@@ -636,7 +796,7 @@ function buildSimpleQtyCard(key, title, sheetName, items, note) {
   table.appendChild(tbody);
   card.appendChild(table);
   const remarksField = el('div', {class:'field'});
-  remarksField.appendChild(el('label', {text:'Remarques / Opmerkingen'}));
+  remarksField.appendChild(el('label', {text: bi('Remarques','Opmerkingen')}));
   remarksField.appendChild(el('textarea', {id:`${key}__remarques`}));
   card.appendChild(remarksField);
   return card;
@@ -644,19 +804,27 @@ function buildSimpleQtyCard(key, title, sheetName, items, note) {
 
 function buildTextileCard(key, def) {
   const card = el('div', {class:'card', id:`card__${key}`});
-  card.appendChild(el('h2', {text: def.label}));
+  const labels = SECTION_LABELS[key];
+  card.appendChild(el('h2', {text: labels ? bi(labels.fr, labels.nl, def.label) : def.label}));
   if (TEXTILE_SECTION_KEYS.includes(key)) {
     const note = getTextileNote();
     if (note) {
-      card.appendChild(el('div', {class:'textile-note', html: `<span class="textile-note-icon">🗓️</span><span class="textile-note-text"><div class="fr">${note.fr}</div><div class="nl">${note.nl}</div></span>`}));
+      const noteHtml = bi(
+        `<div class="fr">${note.fr}</div>`,
+        `<div class="nl">${note.nl}</div>`,
+        `<div class="fr">${note.fr}</div><div class="nl">${note.nl}</div>`
+      );
+      card.appendChild(el('div', {class:'textile-note', html: `<span class="textile-note-icon">🗓️</span><span class="textile-note-text">${noteHtml}</span>`}));
     }
   }
   if (COLOR_CHECKBOX_SECTIONS.includes(key)) {
-    card.appendChild(el('div', {class:'legend', html: 'Rappel : indiquez la quantité commandée par catégorie <span class="dot-red">rouge</span><span class="dot-yellow">jaune</span><span class="dot-green">vert</span> Yunus pour les vêtements &amp; manteaux. / Geef het bestelde aantal per Yunus-categorie <span class="dot-red">rood</span><span class="dot-yellow">geel</span><span class="dot-green">groen</span> op voor kleding &amp; jassen.'}));
+    const legendFr = 'Rappel : indiquez la quantité commandée par catégorie <span class="dot-red">rouge</span><span class="dot-yellow">jaune</span><span class="dot-green">vert</span> Yunus pour les vêtements &amp; manteaux.';
+    const legendNl = 'Geef het bestelde aantal per Yunus-categorie <span class="dot-red">rood</span><span class="dot-yellow">geel</span><span class="dot-green">groen</span> op voor kleding &amp; jassen.';
+    card.appendChild(el('div', {class:'legend', html: bi(legendFr, legendNl, `${legendFr} / ${legendNl}`)}));
   }
   card.appendChild(buildQtyTable(key, def.groups, {collapsible: key === 'economat'}));
   const remarksField = el('div', {class:'field'});
-  remarksField.appendChild(el('label', {text:'Remarques / Opmerkingen'}));
+  remarksField.appendChild(el('label', {text: bi('Remarques','Opmerkingen')}));
   remarksField.appendChild(el('textarea', {id:`${key}__remarques`}));
   card.appendChild(remarksField);
   return card;
@@ -732,9 +900,18 @@ function fetchOdooStockRaw(category) {
 // shops order them often enough to be worth offering directly rather than
 // forcing a free-text workaround. Not linked to any real stock quantity.
 const MANUAL_ACCESSOIRE_OPTIONS = [
-  { value: 'Souris', label: 'Souris / Muis' },
-  { value: 'Clavier', label: 'Clavier / Toetsenbord' },
+  { value: 'Souris', manual: true, fr: 'Souris', nl: 'Muis' },
+  { value: 'Clavier', manual: true, fr: 'Clavier', nl: 'Toetsenbord' },
 ];
+
+// Builds the dropdown label for a stock option in the currently-selected
+// store's language. Kept as a function (not a pre-baked string) because
+// odooStockOptions is fetched/cached once per category but the label must
+// still follow the language of whichever store is selected at render time.
+function stockOptionLabel(o) {
+  if (o.manual) return bi(o.fr, o.nl, `${o.fr} / ${o.nl}`);
+  return bi(`${o.value} (${o.qty} en stock)`, `${o.value} (${o.qty} op voorraad)`, `${o.value} (${o.qty} en stock / op voorraad)`);
+}
 
 function ensureOdooStockLoaded(category) {
   if (!odooStockLoaded[category]) {
@@ -742,10 +919,7 @@ function ensureOdooStockLoaded(category) {
       odooStockOptions[category].length = 0;
       if (odooStockMeta[category]) odooStockMeta[category] = {};
       items.forEach(it => {
-        odooStockOptions[category].push({
-          value: it.name,
-          label: `${it.name} (${it.qty} en stock / op voorraad)`
-        });
+        odooStockOptions[category].push({ value: it.name, qty: it.qty });
         if (odooStockMeta[category]) odooStockMeta[category][it.name] = it.osGroup || null;
       });
       if (category === 'accessoire') {
@@ -761,7 +935,7 @@ function refreshModeleSelects(prefix) {
     const current = sel.value;
     sel.innerHTML = '';
     sel.appendChild(el('option', {value:'', text:'--'}));
-    odooStockOptions[prefix].forEach(o => sel.appendChild(el('option', {value:o.value, text:o.label})));
+    odooStockOptions[prefix].forEach(o => sel.appendChild(el('option', {value:o.value, text: stockOptionLabel(o)})));
     if (current) sel.value = current;
     if (odooStockMeta[prefix]) {
       const idx = sel.id.slice(`${prefix}__modele__`.length);
@@ -797,29 +971,33 @@ function updateOsOptionsForRow(prefix, idx) {
 }
 
 function remarqueCol() {
-  return [{key:'remarque', label:'Remarque / Opmerking', type:'text'}];
+  return [{key:'remarque', label:bi('Remarque','Opmerking'), type:'text'}];
 }
 
 // One entry per Odoo product category shown in the Informatique section.
 // "prefix" doubles as the category query param sent to the odoo-stock
 // Edge Function, and as the id prefix for that category's table/inputs.
+// title/addLabel are {fr, nl, both} objects (not plain strings) because
+// this array is built once at page load, before any store is selected -
+// the actual text is resolved via bi() at render time in
+// buildInformatiqueCard(), not here.
 const INFO_CATEGORIES = [
-  { prefix:'laptop', title:'Laptops', addLabel:'+ Ajouter une ligne laptop / Laptoprij toevoegen',
+  { prefix:'laptop', title:{fr:'Laptops', nl:'Laptops', both:'Laptops'}, addLabel:{fr:'+ Ajouter une ligne laptop', nl:'+ Laptoprij toevoegen', both:'+ Ajouter une ligne laptop / Laptoprij toevoegen'},
     extraColumns: () => ([
       {key:'os', label:'OS', type:'select', options: DATA.osOptions},
-      {key:'clavier', label:'Clavier / Toetsenbord', type:'select', options:['AZERTY','QWERTY']}
+      {key:'clavier', label:bi('Clavier','Toetsenbord'), type:'select', options:['AZERTY','QWERTY']}
     ]) },
-  { prefix:'desktop', title:'Desktops', addLabel:'+ Ajouter une ligne desktop / Desktoprij toevoegen',
+  { prefix:'desktop', title:{fr:'Desktops', nl:'Desktops', both:'Desktops'}, addLabel:{fr:'+ Ajouter une ligne desktop', nl:'+ Desktoprij toevoegen', both:'+ Ajouter une ligne desktop / Desktoprij toevoegen'},
     extraColumns: () => ([
       {key:'os', label:'OS', type:'select', options: DATA.osOptions}
     ]) },
-  { prefix:'display', title:'Écrans / Schermen', addLabel:'+ Ajouter une ligne écran / Schermrij toevoegen', extraColumns: remarqueCol },
-  { prefix:'accessoire', title:'Accessoires', addLabel:'+ Ajouter une ligne accessoire / Accessoirerij toevoegen', extraColumns: remarqueCol },
-  { prefix:'misc', title:'Divers / Overige', addLabel:'+ Ajouter une ligne / Rij toevoegen', extraColumns: remarqueCol },
-  { prefix:'printer', title:'Imprimantes / Printers', addLabel:'+ Ajouter une ligne imprimante / Printerrij toevoegen', extraColumns: remarqueCol },
-  { prefix:'projector', title:'Projecteurs / Projectors', addLabel:'+ Ajouter une ligne projecteur / Projectorrij toevoegen', extraColumns: remarqueCol },
-  { prefix:'smartphone', title:'Smartphones', addLabel:'+ Ajouter une ligne smartphone / Smartphonerij toevoegen', extraColumns: remarqueCol },
-  { prefix:'tablet', title:'Tablettes / Tablets', addLabel:'+ Ajouter une ligne tablette / Tabletrij toevoegen', extraColumns: remarqueCol }
+  { prefix:'display', title:{fr:'Écrans', nl:'Schermen', both:'Écrans / Schermen'}, addLabel:{fr:'+ Ajouter une ligne écran', nl:'+ Schermrij toevoegen', both:'+ Ajouter une ligne écran / Schermrij toevoegen'}, extraColumns: remarqueCol },
+  { prefix:'accessoire', title:{fr:'Accessoires', nl:'Accessoires', both:'Accessoires'}, addLabel:{fr:'+ Ajouter une ligne accessoire', nl:'+ Accessoirerij toevoegen', both:'+ Ajouter une ligne accessoire / Accessoirerij toevoegen'}, extraColumns: remarqueCol },
+  { prefix:'misc', title:{fr:'Divers', nl:'Overige', both:'Divers / Overige'}, addLabel:{fr:'+ Ajouter une ligne', nl:'+ Rij toevoegen', both:'+ Ajouter une ligne / Rij toevoegen'}, extraColumns: remarqueCol },
+  { prefix:'printer', title:{fr:'Imprimantes', nl:'Printers', both:'Imprimantes / Printers'}, addLabel:{fr:'+ Ajouter une ligne imprimante', nl:'+ Printerrij toevoegen', both:'+ Ajouter une ligne imprimante / Printerrij toevoegen'}, extraColumns: remarqueCol },
+  { prefix:'projector', title:{fr:'Projecteurs', nl:'Projectors', both:'Projecteurs / Projectors'}, addLabel:{fr:'+ Ajouter une ligne projecteur', nl:'+ Projectorrij toevoegen', both:'+ Ajouter une ligne projecteur / Projectorrij toevoegen'}, extraColumns: remarqueCol },
+  { prefix:'smartphone', title:{fr:'Smartphones', nl:'Smartphones', both:'Smartphones'}, addLabel:{fr:'+ Ajouter une ligne smartphone', nl:'+ Smartphonerij toevoegen', both:'+ Ajouter une ligne smartphone / Smartphonerij toevoegen'}, extraColumns: remarqueCol },
+  { prefix:'tablet', title:{fr:'Tablettes', nl:'Tablets', both:'Tablettes / Tablets'}, addLabel:{fr:'+ Ajouter une ligne tablette', nl:'+ Tabletrij toevoegen', both:'+ Ajouter une ligne tablette / Tabletrij toevoegen'}, extraColumns: remarqueCol }
 ];
 INFO_CATEGORIES.forEach(cat => {
   cat.btnId = `btnAdd${cat.prefix.charAt(0).toUpperCase()}${cat.prefix.slice(1)}Row`;
@@ -827,24 +1005,28 @@ INFO_CATEGORIES.forEach(cat => {
 
 // French labels used for the Excel export headers (key -> header text).
 const INFO_COLUMN_LABELS_FR = { modele:'Modèle', os:'OS', clavier:'Clavier', remarque:'Remarque', commande:'Commandé' };
+const INFO_COLUMN_LABELS_NL = { modele:'Model', os:'OS', clavier:'Toetsenbord', remarque:'Opmerking', commande:'Besteld' };
 
 function infoColumns(cat) {
-  return [{key:'modele', label:'Modèle / Model', type:'select', options: odooStockOptions[cat.prefix]}]
+  return [{key:'modele', label:bi('Modèle','Model'), type:'select', options: odooStockOptions[cat.prefix]}]
     .concat(cat.extraColumns())
-    .concat([{key:'commande', label:'Commandé / Besteld', type:'number'}]);
+    .concat([{key:'commande', label:bi('Commandé','Besteld'), type:'number'}]);
 }
 
 function buildInformatiqueCard() {
   const card = el('div', {class:'card', id:'card__informatique'});
-  card.appendChild(el('h2', {text:'Informatique - Informatica'}));
-  card.appendChild(el('p', {class:'hint', text:"Une ligne par type de produit. Les modèles et le stock disponible viennent d'Odoo (seuls les articles en stock sont proposés). / Één regel per producttype. De modellen en de beschikbare voorraad komen uit Odoo (enkel artikelen op voorraad worden voorgesteld)."}));
+  card.appendChild(el('h2', {text: bi('Informatique','Informatica','Informatique - Informatica')}));
+  card.appendChild(el('p', {class:'hint', text: bi(
+    "Une ligne par type de produit. Les modèles et le stock disponible viennent d'Odoo (seuls les articles en stock sont proposés).",
+    'Één regel per producttype. De modellen en de beschikbare voorraad komen uit Odoo (enkel artikelen op voorraad worden voorgesteld).'
+  )}));
 
   INFO_CATEGORIES.forEach(cat => {
-    card.appendChild(el('h3', {text: cat.title}));
+    card.appendChild(el('h3', {text: bi(cat.title.fr, cat.title.nl, cat.title.both)}));
     const cols = infoColumns(cat);
     const table = buildDeviceTable(cat.prefix, cols, 1);
     card.appendChild(table);
-    const btn = el('button', {type:'button', class:'btn-add', id: cat.btnId, text: cat.addLabel});
+    const btn = el('button', {type:'button', class:'btn-add', id: cat.btnId, text: bi(cat.addLabel.fr, cat.addLabel.nl, cat.addLabel.both)});
     btn.onclick = () => {
       document.getElementById(`${cat.prefix}__tbody`).appendChild(deviceRow(cat.prefix, table._nextIdx++, cols));
     };
@@ -896,6 +1078,7 @@ function wireCollapsible(card, startOpen) {
 }
 
 function renderSections() {
+  updateLangForStore();
   dynamicSections.innerHTML = '';
   const store = storeSelect.value;
   const noMsg = document.getElementById('noSectionsMsg');
@@ -926,7 +1109,7 @@ function toast(msg) {
 }
 
 document.getElementById('btnReset').addEventListener('click', () => {
-  if (confirm('Réinitialiser tout le formulaire ? / Het hele formulier resetten?')) {
+  if (confirm(bi('Réinitialiser tout le formulaire ?', 'Het hele formulier resetten?'))) {
     document.querySelectorAll('input, textarea, select').forEach(i => {
       if (i.type === 'radio' || i.type === 'checkbox') i.checked = false;
       else if (i.tagName !== 'SELECT' || i === storeSelect) i.value = '';
@@ -957,9 +1140,16 @@ function colorQtysFor(id) {
   };
 }
 
-function collectQtyRows(prefix, def) {
+function collectQtyRows(prefix, def, lang) {
   const rows = [];
   const isColorSection = COLOR_CHECKBOX_SECTIONS.includes(prefix);
+  // "lang" (fr/nl/both) controls whether the export gets one article-name
+  // column or both, matching the store's on-screen language.
+  function articleCols(item) {
+    if (lang === 'fr') return [item[0]];
+    if (lang === 'nl') return [item[1]];
+    return [item[0], item[1]];
+  }
   function pushRow(id, item) {
     const colors = colorQtysFor(id);
     if (colors) {
@@ -968,13 +1158,13 @@ function collectQtyRows(prefix, def) {
       // quantities keep the row in the recap.
       if (parseFloat(colors.red) || parseFloat(colors.yellow) || parseFloat(colors.green)) {
         rows.push(isColorSection
-          ? [item[0], item[1], '', '', colors.red, colors.yellow, colors.green]
-          : [item[0], item[1], '', '']);
+          ? [...articleCols(item), '', '', colors.red, colors.yellow, colors.green]
+          : [...articleCols(item), '', '']);
       }
     } else {
       const v = document.getElementById(id);
       const qty = v ? v.value : '';
-      if (parseFloat(qty)) rows.push(isColorSection ? [item[0], item[1], qty, ''] : [item[0], item[1], qty, '']);
+      if (parseFloat(qty)) rows.push([...articleCols(item), qty, '']);
     }
   }
   if (def.groups) {
@@ -1045,6 +1235,15 @@ function buildResumeSheet(resumeRows, sectionHeaderRows) {
 function buildWorkbook() {
   const store = storeSelect.value || '(non renseigné)';
   const date = document.getElementById('deliveryDate').value || '(non renseignée)';
+  const lang = langFor(store);
+  // Local fr/nl/both text helper, same signature as the on-screen bi()
+  // but scoped to this specific store's language (so the export matches
+  // the store even if it's built/downloaded from a different tab state).
+  function t(fr, nl, both) {
+    if (lang === 'fr') return fr;
+    if (lang === 'nl') return nl;
+    return both !== undefined ? both : `${fr} / ${nl}`;
+  }
   const wb = XLSX.utils.book_new();
 
   const radioVal = (name) => {
@@ -1053,24 +1252,24 @@ function buildWorkbook() {
   };
 
   const resumeRows = [
-    ['BON DE COMMANDE - BESTELBON'],
+    [t('BON DE COMMANDE', 'BESTELBON', 'BON DE COMMANDE - BESTELBON')],
     [],
-    ['Magasin / Winkel', store],
-    ['Date de livraison / Leveringsdatum', date],
+    [t('Magasin', 'Winkel'), store],
+    [t('Date de livraison', 'Leveringsdatum'), date],
     [],
-    ['LOGISTIQUE'],
-    ['Je veux une livraison / Ik wil een levering', radioVal('wantDelivery')],
-    ['Je veux un transfert / Ik wil een transfert', radioVal('wantTransfer')],
-    ['Je veux un retour / Ik wil een terugkeer', radioVal('wantReturn')],
-    ["N° de chariots pour retour à Yunus", document.getElementById('nbChariots').value],
-    ["N° de bacs de réparations IT (transport de valeur)", document.getElementById('nbBacsIT').value],
-    ["Raison du retour (bacs IT)", document.getElementById('bacsITReason') ? document.getElementById('bacsITReason').value : ''],
-    ["N° de sacs avec de la petite monnaie", document.getElementById('nbSacsMonnaie').value],
-    ["Cartons vides pour livres (commandé)", document.getElementById('nbCartonsLivres').value],
-    ["Bacs jaunes pour déchets (commandé)", document.getElementById('nbBacsJaunes').value],
-    ["Farde avec la compta jointe", document.getElementById('fardeCompta').checked ? 'Oui' : 'Non'],
-    ["Vidange produits OFT", document.getElementById('vidangeOFT').checked ? 'Oui' : 'Non'],
-    ["Remarques logistique", document.getElementById('logistiqueRemarques').value]
+    [t('LOGISTIQUE', 'LOGISTIEK', 'LOGISTIQUE')],
+    [t('Je veux une livraison', 'Ik wil een levering'), radioVal('wantDelivery')],
+    [t('Je veux un transfert', 'Ik wil een transfert'), radioVal('wantTransfer')],
+    [t('Je veux un retour', 'Ik wil een terugkeer'), radioVal('wantReturn')],
+    [t('N° de chariots pour retour à Yunus', 'Aantal rolkarren'), document.getElementById('nbChariots').value],
+    [t('N° de bacs de réparations IT (transport de valeur)', 'Aantal bakken reparaties IT (transport de valeur)'), document.getElementById('nbBacsIT').value],
+    [t('Raison du retour (bacs IT)', 'Reden van de terugkeer (bakken IT)'), document.getElementById('bacsITReason') ? document.getElementById('bacsITReason').value : ''],
+    [t('N° de sacs avec de la petite monnaie', 'Aantal zakken kleingeld'), document.getElementById('nbSacsMonnaie').value],
+    [t('Cartons vides pour livres (commandé)', 'Kartonnen dozen voor boeken (besteld)'), document.getElementById('nbCartonsLivres').value],
+    [t('Bacs jaunes pour déchets (commandé)', 'Gele bakken voor afval (besteld)'), document.getElementById('nbBacsJaunes').value],
+    [t('Farde avec la compta jointe', 'Map met boekhouding bijgevoegd'), document.getElementById('fardeCompta').checked ? t('Oui','Ja') : t('Non','Neen')],
+    [t('Vidange produits OFT', 'Leeggoed producten OFT'), document.getElementById('vidangeOFT').checked ? t('Oui','Ja') : t('Non','Neen')],
+    [t('Remarques logistique', 'Opmerkingen logistiek'), document.getElementById('logistiqueRemarques').value]
   ];
   // Row 5 is the "LOGISTIQUE" section label - see buildResumeSheet().
   const resumeSheet = buildResumeSheet(resumeRows, [5]);
@@ -1079,7 +1278,7 @@ function buildWorkbook() {
   const flags = DATA.stores[store] || {};
 
   function addQtySheet(sheetName, headerTitle, prefix, def) {
-    const qtyRows = collectQtyRows(prefix, def);
+    const qtyRows = collectQtyRows(prefix, def, lang);
     const remarksEl = document.getElementById(`${prefix}__remarques`);
     const remarks = remarksEl ? remarksEl.value : '';
     // Skip this sheet entirely if nothing was actually ordered in this
@@ -1087,15 +1286,21 @@ function buildWorkbook() {
     // contain the tabs that are relevant to this particular order.
     if (!qtyRows.length && !remarks) return;
     const isColorSection = COLOR_CHECKBOX_SECTIONS.includes(prefix);
-    const header = ['Article (FR)', 'Article (NL)', 'Commandé / Besteld', 'Livré / Geleverd (Yunus)'];
-    if (isColorSection) header.push('Rouge / Rood', 'Jaune / Geel', 'Vert / Groen');
-    const rows = [[headerTitle], [], header];
+    const articleHeader = lang === 'both' ? ['Article (FR)', 'Article (NL)'] : [t('Article', 'Artikel')];
+    const header = articleHeader.concat([t('Commandé', 'Besteld'), t('Livré (Yunus)', 'Geleverd (Yunus)', 'Livré / Geleverd (Yunus)')]);
+    if (isColorSection) header.push(t('Rouge','Rood'), t('Jaune','Geel'), t('Vert','Groen'));
+    const labels = SECTION_LABELS[prefix];
+    const localizedTitle = labels ? t(labels.fr, labels.nl, headerTitle) : headerTitle;
+    const rows = [[localizedTitle], [], header];
     qtyRows.forEach(r => rows.push(r));
-    if (remarks) { rows.push([]); rows.push(['Remarques', remarks]); }
+    if (remarks) { rows.push([]); rows.push([t('Remarques','Opmerkingen'), remarks]); }
     const sheet = XLSX.utils.aoa_to_sheet(rows);
-    sheet['!cols'] = isColorSection
-      ? [{ wch: 32 }, { wch: 32 }, { wch: 14 }, { wch: 16 }, { wch: 10 }, { wch: 10 }, { wch: 10 }]
-      : [{ wch: 32 }, { wch: 32 }, { wch: 14 }, { wch: 16 }];
+    const articleColWidths = lang === 'both' ? [{ wch: 32 }, { wch: 32 }] : [{ wch: 40 }];
+    sheet['!cols'] = articleColWidths.concat(
+      isColorSection
+        ? [{ wch: 14 }, { wch: 16 }, { wch: 10 }, { wch: 10 }, { wch: 10 }]
+        : [{ wch: 14 }, { wch: 16 }]
+    );
     xlsxStyleRow(sheet, 0, 1, XLSX_TITLE_STYLE);
     xlsxStyleRow(sheet, 2, header.length, XLSX_HEADER_STYLE);
     XLSX.utils.book_append_sheet(wb, sheet, sheetName.substring(0,31));
@@ -1113,7 +1318,7 @@ function buildWorkbook() {
   // ordered quantity (hasInformatiqueLines() checks the "Commandé" column,
   // not just any filled-in field) - same rule as the other section sheets.
   if (flags.informatique && hasInformatiqueLines()) {
-    const rows = [['INFORMATIQUE / INFORMATICA'], []];
+    const rows = [[t('INFORMATIQUE','INFORMATICA','INFORMATIQUE / INFORMATICA')], []];
     const catTitleRows = [];
     const colHeaderRows = [];
     let maxCols = 1;
@@ -1125,8 +1330,8 @@ function buildWorkbook() {
       if (!firstCat) rows.push([]);
       firstCat = false;
       catTitleRows.push(rows.length);
-      rows.push([cat.title.toUpperCase()]);
-      const headerLabels = cols.map(c => INFO_COLUMN_LABELS_FR[c.key] || c.label);
+      rows.push([t(cat.title.fr, cat.title.nl, cat.title.both).toUpperCase()]);
+      const headerLabels = cols.map(c => (lang === 'nl' ? INFO_COLUMN_LABELS_NL[c.key] : INFO_COLUMN_LABELS_FR[c.key]) || c.label);
       colHeaderRows.push(rows.length);
       rows.push(headerLabels);
       maxCols = Math.max(maxCols, headerLabels.length);
@@ -1173,17 +1378,23 @@ function hasInformatiqueLines() {
 function buildInformatiqueWorkbook() {
   const store = storeSelect.value || '(non renseigné)';
   const date = document.getElementById('deliveryDate').value || '(non renseignée)';
+  const lang = langFor(store);
+  function t(fr, nl, both) {
+    if (lang === 'fr') return fr;
+    if (lang === 'nl') return nl;
+    return both !== undefined ? both : `${fr} / ${nl}`;
+  }
   const wb = XLSX.utils.book_new();
 
   const resumeRows = [
-    ['BON DE COMMANDE - EXTRAIT INFORMATIQUE'],
+    [t('BON DE COMMANDE - EXTRAIT INFORMATIQUE', 'BESTELBON - UITTREKSEL INFORMATICA', 'BON DE COMMANDE - EXTRAIT INFORMATIQUE')],
     [],
-    ['Magasin / Winkel', store],
-    ['Date de livraison / Leveringsdatum', date]
+    [t('Magasin', 'Winkel'), store],
+    [t('Date de livraison', 'Leveringsdatum'), date]
   ];
   XLSX.utils.book_append_sheet(wb, buildResumeSheet(resumeRows, []), 'Résumé');
 
-  const rows = [['INFORMATIQUE / INFORMATICA'], []];
+  const rows = [[t('INFORMATIQUE','INFORMATICA','INFORMATIQUE / INFORMATICA')], []];
   const catTitleRows = [];
   const colHeaderRows = [];
   let maxCols = 1;
@@ -1191,8 +1402,8 @@ function buildInformatiqueWorkbook() {
     const cols = infoColumns(cat);
     if (i > 0) rows.push([]);
     catTitleRows.push(rows.length);
-    rows.push([cat.title.toUpperCase()]);
-    const headerLabels = cols.map(c => INFO_COLUMN_LABELS_FR[c.key] || c.label);
+    rows.push([t(cat.title.fr, cat.title.nl, cat.title.both).toUpperCase()]);
+    const headerLabels = cols.map(c => (lang === 'nl' ? INFO_COLUMN_LABELS_NL[c.key] : INFO_COLUMN_LABELS_FR[c.key]) || c.label);
     colHeaderRows.push(rows.length);
     rows.push(headerLabels);
     maxCols = Math.max(maxCols, headerLabels.length);
@@ -1210,19 +1421,19 @@ function buildInformatiqueWorkbook() {
 
 document.getElementById('btnExport').addEventListener('click', () => {
   const store = storeSelect.value;
-  if (!store) { toast("Merci de choisir votre magasin avant d'exporter. / Gelieve uw winkel te kiezen voordat u exporteert."); return; }
+  if (!store) { toast(bi("Merci de choisir votre magasin avant d'exporter.", 'Gelieve uw winkel te kiezen voordat u exporteert.')); return; }
   const dateVal = document.getElementById('deliveryDate').value;
   if (!isDeliveryDateValid(dateVal, store)) {
     toast(deliveryDateErrorMessage(store));
     return;
   }
   if (!document.querySelector('input[name="wantDelivery"]:checked')) {
-    toast('Merci de répondre à la question "Je veux une livraison". / Gelieve de vraag "Ik wil een levering" te beantwoorden.');
+    toast(bi('Merci de répondre à la question "Je veux une livraison".', 'Gelieve de vraag "Ik wil een levering" te beantwoorden.'));
     return;
   }
   const wb = buildWorkbook();
   XLSX.writeFile(wb, getExportFilename());
-  toast('Copie téléchargée sur votre ordinateur. / Kopie gedownload op uw computer.');
+  toast(bi('Copie téléchargée sur votre ordinateur.', 'Kopie gedownload op uw computer.'));
 });
 
 const EMAIL_TARGET = 'emmanuel.cossee@oxfam.org';
@@ -1344,7 +1555,7 @@ function collectAllLineItems() {
       const qtyIdx = cols.findIndex(c => c.key === 'commande');
       collectDeviceRows(cat.prefix, cols).forEach(r => {
         const qty = parseFloat(r[qtyIdx]);
-        if (qty) lines.push({ category: `Informatique - ${cat.title}`, article_fr: r.slice(0, qtyIdx).filter(Boolean).join(' / '), article_nl: '', quantity: qty });
+        if (qty) lines.push({ category: `Informatique - ${cat.title.both}`, article_fr: r.slice(0, qtyIdx).filter(Boolean).join(' / '), article_nl: '', quantity: qty });
       });
     });
   }
@@ -1599,15 +1810,15 @@ function sendEmailWithAttachment(store, dateVal, opts) {
 
 document.getElementById('btnSend').addEventListener('click', async () => {
   const store = storeSelect.value;
-  if (!store) { toast("Merci de choisir votre magasin avant d'envoyer. / Gelieve uw winkel te kiezen voordat u verstuurt."); return; }
+  if (!store) { toast(bi("Merci de choisir votre magasin avant d'envoyer.", 'Gelieve uw winkel te kiezen voordat u verstuurt.')); return; }
   const dateVal = document.getElementById('deliveryDate').value;
-  if (!dateVal) { toast('Merci de renseigner la date de livraison. / Gelieve de leveringsdatum in te vullen.'); return; }
+  if (!dateVal) { toast(bi('Merci de renseigner la date de livraison.', 'Gelieve de leveringsdatum in te vullen.')); return; }
   if (!isDeliveryDateValid(dateVal, store)) {
     toast(deliveryDateErrorMessage(store));
     return;
   }
   if (!document.querySelector('input[name="wantDelivery"]:checked')) {
-    toast('Merci de répondre à la question "Je veux une livraison". / Gelieve de vraag "Ik wil een levering" te beantwoorden.');
+    toast(bi('Merci de répondre à la question "Je veux une livraison".', 'Gelieve de vraag "Ik wil een levering" te beantwoorden.'));
     return;
   }
 
@@ -1615,14 +1826,14 @@ document.getElementById('btnSend').addEventListener('click', async () => {
   let editPasscode = null;
 
   if (isEditMode) {
-    const entered = window.prompt('Code de modification requis / Wijzigingscode vereist:');
+    const entered = window.prompt(bi('Code de modification requis :', 'Wijzigingscode vereist:', 'Code de modification requis / Wijzigingscode vereist:'));
     if (entered === null) return; // cancelled
     editPasscode = entered;
   }
 
   const sendBtn = document.getElementById('btnSend');
   sendBtn.disabled = true;
-  toast(isEditMode ? 'Enregistrement en cours... / Bezig met opslaan...' : 'Envoi en cours... / Bezig met verzenden...');
+  toast(isEditMode ? bi('Enregistrement en cours...', 'Bezig met opslaan...') : bi('Envoi en cours...', 'Bezig met verzenden...'));
 
   if (isEditMode) {
     // Editing an existing order only updates the tracked record - it does not
@@ -1639,9 +1850,9 @@ document.getElementById('btnSend').addEventListener('click', async () => {
     } catch (e) {
       console.error(e);
       if (e.message === 'WRONG_PASSCODE') {
-        toast('Code incorrect. Modifications non enregistrées. / Onjuiste code. Wijzigingen niet opgeslagen.');
+        toast(bi('Code incorrect. Modifications non enregistrées.', 'Onjuiste code. Wijzigingen niet opgeslagen.'));
       } else {
-        toast("Échec de l'enregistrement des modifications. Réessayez plus tard. / Opslaan van de wijzigingen is mislukt. Probeer het later opnieuw.");
+        toast(bi("Échec de l'enregistrement des modifications. Réessayez plus tard.", 'Opslaan van de wijzigingen is mislukt. Probeer het later opnieuw.'));
       }
     }
     sendBtn.disabled = false;
@@ -1701,15 +1912,15 @@ document.getElementById('btnSend').addEventListener('click', async () => {
   function infoSuffix() {
     if (infoEmailAttempted === null) return '';
     return infoEmailAttempted
-      ? ` L'extrait informatique a aussi été envoyé à ${INFO_EMAIL_TARGET}. / Het informatica-uittreksel werd ook verzonden naar ${INFO_EMAIL_TARGET}.`
-      : ` Échec de l'envoi de l'extrait informatique à ${INFO_EMAIL_TARGET}. / Verzenden van het informatica-uittreksel naar ${INFO_EMAIL_TARGET} is mislukt.`;
+      ? ' ' + bi(`L'extrait informatique a aussi été envoyé à ${INFO_EMAIL_TARGET}.`, `Het informatica-uittreksel werd ook verzonden naar ${INFO_EMAIL_TARGET}.`)
+      : ' ' + bi(`Échec de l'envoi de l'extrait informatique à ${INFO_EMAIL_TARGET}.`, `Verzenden van het informatica-uittreksel naar ${INFO_EMAIL_TARGET} is mislukt.`);
   }
 
   function shopSuffix() {
     if (shopEmailAttempted === null) return '';
     return shopEmailAttempted
-      ? ` Une copie a aussi été envoyée à ${shopEmail}. / Een kopie werd ook verzonden naar ${shopEmail}.`
-      : ` Échec de l'envoi de la copie à ${shopEmail}. / Verzenden van de kopie naar ${shopEmail} is mislukt.`;
+      ? ' ' + bi(`Une copie a aussi été envoyée à ${shopEmail}.`, `Een kopie werd ook verzonden naar ${shopEmail}.`)
+      : ' ' + bi(`Échec de l'envoi de la copie à ${shopEmail}.`, `Verzenden van de kopie naar ${shopEmail} is mislukt.`);
   }
 
   function logSecondaryFailures() {
@@ -1728,13 +1939,13 @@ document.getElementById('btnSend').addEventListener('click', async () => {
   } else if (emailAttempted && !dbOk) {
     console.error(outcomes.db.reason);
     logSecondaryFailures();
-    toast("Email envoyé, mais l'enregistrement dans le suivi des commandes a échoué. Réessayez plus tard. / E-mail verzonden, maar de registratie in de bestelopvolging is mislukt. Probeer het later opnieuw." + infoSuffix() + shopSuffix());
+    toast(bi("Email envoyé, mais l'enregistrement dans le suivi des commandes a échoué. Réessayez plus tard.", "E-mail verzonden, maar de registratie in de bestelopvolging is mislukt. Probeer het later opnieuw.") + infoSuffix() + shopSuffix());
   } else if (!emailAttempted && dbOk) {
     console.error(outcomes.email.reason);
-    toast("Enregistré dans le suivi des commandes, mais l'envoi de l'email a échoué. Réessayez, ou téléchargez une copie et envoyez-la manuellement. / Geregistreerd in de bestelopvolging, maar het verzenden van de e-mail is mislukt. Probeer opnieuw, of download een kopie en verstuur deze handmatig." + infoSuffix() + shopSuffix());
+    toast(bi("Enregistré dans le suivi des commandes, mais l'envoi de l'email a échoué. Réessayez, ou téléchargez une copie et envoyez-la manuellement.", "Geregistreerd in de bestelopvolging, maar het verzenden van de e-mail is mislukt. Probeer opnieuw, of download een kopie en verstuur deze handmatig.") + infoSuffix() + shopSuffix());
   } else {
     console.error(outcomes.email.reason, outcomes.db.reason);
-    toast("Échec de l'envoi et de l'enregistrement. Réessayez, ou téléchargez une copie et envoyez-la manuellement. / Verzenden en registreren mislukt. Probeer opnieuw, of download een kopie en verstuur deze handmatig." + infoSuffix() + shopSuffix());
+    toast(bi("Échec de l'envoi et de l'enregistrement. Réessayez, ou téléchargez une copie et envoyez-la manuellement.", "Verzenden en registreren mislukt. Probeer opnieuw, of download een kopie en verstuur deze handmatig.") + infoSuffix() + shopSuffix());
   }
 
   sendBtn.disabled = false;
@@ -1762,8 +1973,8 @@ async function bootstrapEditMode() {
   const loadingBtns = [sendBtn, exportBtn, resetBtn].filter(Boolean);
   loadingBtns.forEach(b => { b.disabled = true; });
   const originalSendLabel = sendBtn ? sendBtn.textContent : '';
-  if (sendBtn) sendBtn.textContent = 'Chargement de la commande... / Bestelling wordt geladen...';
-  toast('Chargement de la commande à modifier... / De te wijzigen bestelling wordt geladen...');
+  if (sendBtn) sendBtn.textContent = bi('Chargement de la commande...', 'Bestelling wordt geladen...');
+  toast(bi('Chargement de la commande à modifier...', 'De te wijzigen bestelling wordt geladen...'));
 
   try {
     const resp = await fetch(`${SUPABASE_URL}/rest/v1/orders?id=eq.${encodeURIComponent(editId)}&select=*`, {
@@ -1772,13 +1983,13 @@ async function bootstrapEditMode() {
     if (!resp.ok) throw new Error('fetch order failed: ' + resp.status);
     const rows = await resp.json();
     if (!rows.length) {
-      toast("Commande introuvable pour la modification. / Bestelling niet gevonden om te wijzigen.");
+      toast(bi('Commande introuvable pour la modification.', 'Bestelling niet gevonden om te wijzigen.'));
       if (sendBtn) sendBtn.textContent = originalSendLabel;
       return;
     }
     const order = rows[0];
     if (!order.form_snapshot) {
-      toast("Cette commande a été enregistrée avant l'ajout de la fonction de modification et ne peut pas être rechargée automatiquement. / Deze bestelling werd geregistreerd vóór de wijzigingsfunctie en kan niet automatisch worden herladen.");
+      toast(bi("Cette commande a été enregistrée avant l'ajout de la fonction de modification et ne peut pas être rechargée automatiquement.", 'Deze bestelling werd geregistreerd vóór de wijzigingsfunctie en kan niet automatisch worden herladen.'));
       if (sendBtn) sendBtn.textContent = originalSendLabel;
       return;
     }
@@ -1791,16 +2002,19 @@ async function bootstrapEditMode() {
     await applyFormSnapshot(order.form_snapshot);
     updateBacsITReasonVisibility();
 
-    if (sendBtn) sendBtn.textContent = 'Enregistrer les modifications / Wijzigingen opslaan';
+    if (sendBtn) sendBtn.textContent = bi('Enregistrer les modifications', 'Wijzigingen opslaan');
 
     const banner = document.getElementById('editBanner');
     banner.style.display = 'block';
-    banner.textContent = `Modification de la commande n°${order.id} (${order.store_name}, livraison le ${order.delivery_date || '?'}). Les modifications remplaceront la commande existante. / Wijziging van bestelling nr. ${order.id} (${order.store_name}, levering op ${order.delivery_date || '?'}). De wijzigingen vervangen de bestaande bestelling.`;
+    banner.textContent = bi(
+      `Modification de la commande n°${order.id} (${order.store_name}, livraison le ${order.delivery_date || '?'}). Les modifications remplaceront la commande existante.`,
+      `Wijziging van bestelling nr. ${order.id} (${order.store_name}, levering op ${order.delivery_date || '?'}). De wijzigingen vervangen de bestaande bestelling.`
+    );
 
     window.scrollTo(0, 0);
   } catch (e) {
     console.error(e);
-    toast("Impossible de charger la commande à modifier. / De te wijzigen bestelling kon niet worden geladen.");
+    toast(bi('Impossible de charger la commande à modifier.', 'De te wijzigen bestelling kon niet worden geladen.'));
     if (sendBtn) sendBtn.textContent = originalSendLabel;
   } finally {
     loadingBtns.forEach(b => { b.disabled = false; });
