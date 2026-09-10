@@ -1034,6 +1034,11 @@ function buildInformatiqueCard() {
     ensureOdooStockLoaded(cat.prefix).then(() => refreshModeleSelects(cat.prefix));
   });
 
+  const remarksField = el('div', {class:'field'});
+  remarksField.appendChild(el('label', {text: bi('Remarques','Opmerkingen')}));
+  remarksField.appendChild(el('textarea', {id:'informatique__remarques'}));
+  card.appendChild(remarksField);
+
   return card;
 }
 
@@ -1314,10 +1319,13 @@ function buildWorkbook() {
   if (flags.booksBroc) addQtySheet('Books&Broc', DATA.booksBroc.label, 'booksBroc', DATA.booksBroc);
   if (flags.economat) addQtySheet('Économat-Marketing', DATA.economat.label, 'economat', DATA.economat);
 
-  // Only add the Informatique tab if at least one line actually has an
-  // ordered quantity (hasInformatiqueLines() checks the "Commandé" column,
-  // not just any filled-in field) - same rule as the other section sheets.
-  if (flags.informatique && hasInformatiqueLines()) {
+  // Add the Informatique tab if at least one line has an ordered quantity
+  // (hasInformatiqueLines() checks the "Commandé" column, not just any
+  // filled-in field) - same rule as the other section sheets - or if a
+  // remark was left even with nothing ordered.
+  const informatiqueRemarksEl = document.getElementById('informatique__remarques');
+  const informatiqueRemarks = informatiqueRemarksEl ? informatiqueRemarksEl.value : '';
+  if (flags.informatique && (hasInformatiqueLines() || informatiqueRemarks)) {
     const rows = [[t('INFORMATIQUE','INFORMATICA','INFORMATIQUE / INFORMATICA')], []];
     const catTitleRows = [];
     const colHeaderRows = [];
@@ -1337,6 +1345,7 @@ function buildWorkbook() {
       maxCols = Math.max(maxCols, headerLabels.length);
       catRows.forEach(r => rows.push(r));
     });
+    if (informatiqueRemarks) { rows.push([]); rows.push([t('Remarques','Opmerkingen'), informatiqueRemarks]); }
     const sheet = XLSX.utils.aoa_to_sheet(rows);
     sheet['!cols'] = [{ wch: 42 }].concat(Array(Math.max(maxCols - 1, 0)).fill({ wch: 16 }));
     xlsxStyleRow(sheet, 0, 1, XLSX_TITLE_STYLE);
@@ -1409,6 +1418,9 @@ function buildInformatiqueWorkbook() {
     maxCols = Math.max(maxCols, headerLabels.length);
     collectDeviceRows(cat.prefix, cols).forEach(r => rows.push(r));
   });
+  const infoRemarksEl = document.getElementById('informatique__remarques');
+  const infoRemarks = infoRemarksEl ? infoRemarksEl.value : '';
+  if (infoRemarks) { rows.push([]); rows.push([t('Remarques','Opmerkingen'), infoRemarks]); }
   const infoSheet = XLSX.utils.aoa_to_sheet(rows);
   infoSheet['!cols'] = [{ wch: 42 }].concat(Array(Math.max(maxCols - 1, 0)).fill({ wch: 16 }));
   xlsxStyleRow(infoSheet, 0, 1, XLSX_TITLE_STYLE);
