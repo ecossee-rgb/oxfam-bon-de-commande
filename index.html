@@ -641,6 +641,20 @@ function el(tag, attrs, children) {
   return e;
 }
 
+// Quantity fields are all whole, non-negative counts - native <input
+// type="number"> still lets someone type/paste "-", "+", "." or "e"
+// (valid partial states for a JS number), which can produce confusing
+// values (e.g. "1e3"). This delegated listener strips anything that isn't
+// a digit as the user types or pastes, on every number field including
+// ones built later by JS (event delegation on document covers them too).
+document.addEventListener('input', (e) => {
+  const t = e.target;
+  if (t && t.tagName === 'INPUT' && t.type === 'number') {
+    const digitsOnly = t.value.replace(/[^0-9]/g, '');
+    if (digitsOnly !== t.value) t.value = digitsOnly;
+  }
+});
+
 // Sections/groups where store staff must flag which Yunus price
 // category (rouge/jaune/vert) the ordered stock falls under. Only
 // CRÈME and MIDMIX track this, and only for the "Vêtements &
