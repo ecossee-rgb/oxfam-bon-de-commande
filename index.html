@@ -940,6 +940,15 @@ function buildDeviceTable(prefix, columns, rowCount) {
 // Live stock lookup (Odoo, via a Supabase Edge Function that keeps the
 // Odoo API key server-side). Populates the "Modèle" dropdowns in the
 // Informatique section instead of free-text brand/model/spec fields.
+// This is the one remaining direct-to-Supabase call in this page, and it's
+// intentionally NOT routed through the Worker: it only returns live Odoo
+// stock counts/model names (no order data), the odoo-stock Edge Function
+// requires a valid Supabase key ("Verify JWT" is on) and touches no order
+// table, and Supabase RLS has no bearing on it. The publishable/anon key
+// below grants nothing on orders/order_lines (RLS denies anon there
+// entirely) - it exists solely to satisfy that JWT check for this one
+// read-only, non-sensitive endpoint.
+const ODOO_STOCK_ANON_KEY = 'sb_publishable_jfEushP76J1NqW9LHeEb5A_8xNHAvba';
 const ODOO_STOCK_URL = 'https://ubqshzvbsqfekziyqxyc.supabase.co/functions/v1/odoo-stock';
 const odooStockOptions = { laptop: [], desktop: [], display: [], accessoire: [], misc: [], printer: [], projector: [], smartphone: [], tablet: [] };
 // model name -> osGroup ('win10'|'win11'|'mac'|null), populated for laptop/desktop only.
@@ -950,7 +959,7 @@ const odooStockLoaded = {};
 function fetchOdooStockRaw(category) {
   if (!odooStockRawCache[category]) {
     odooStockRawCache[category] = fetch(`${ODOO_STOCK_URL}?category=${category}`, {
-      headers: { apikey: SUPABASE_KEY }
+      headers: { apikey: ODOO_STOCK_ANON_KEY }
     }).then(r => r.json()).then(j => j.items || []).catch(e => {
       console.error('odoo stock fetch failed for', category, e);
       return [];
@@ -1573,15 +1582,16 @@ const SHOP_COPY_ENABLED = false;
 // forces yet another fresh commit/deployment attempt.)
 // The edit passcode used to be checked here client-side (a hardcoded
 // EDIT_PASSCODE constant), which GitGuardian correctly flagged as a leaked
-// secret - anyone could read it straight out of the page source, and worse,
-// the anon Supabase key could UPDATE orders / DELETE order_lines directly,
-// so the prompt was purely cosmetic. The check now happens server-side in
-// the `edit-order` Supabase Edge Function (see logOrderToSupabase below),
-// and RLS no longer grants the anon role UPDATE on orders or DELETE on
-// order_lines, so this is the only path that can save an edit.
-
-const SUPABASE_URL = 'https://ubqshzvbsqfekziyqxyc.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_jfEushP76J1NqW9LHeEb5A_8xNHAvba';
+// secret - anyone could read it straight out of the page source. The check
+// now happens server-side in the Cloudflare Worker's /api/edit-order route
+// (see logOrderToSupabase below). All order data (reads and writes) now goes
+// through the same-origin /api/* endpoints on the Worker that already gates
+// this whole app behind a login, using a Supabase service_role key that
+// lives only in the Worker (a Cloudflare Secret, never shipped to the
+// browser). The order-data anon key that used to be here is gone; RLS now
+// denies the anon role everything on orders/order_lines, so even that key
+// alone couldn't read or write order
+// data anymore.
 
 function collectAllLineItems() {
   const store = storeSelect.value;
@@ -1754,18 +1764,14 @@ async function logOrderToSupabase(editPasscode) {
   const lines = collectAllLineItems();
 
   if (editOrderId) {
-    // Edits are applied by the edit-order Edge Function, which checks the
-    // passcode server-side (it never reaches the browser) and, if correct,
-    // writes with the service_role key. RLS denies the anon key UPDATE on
-    // orders and DELETE on order_lines, so this is the only way to save an
-    // edit - throwing 'WRONG_PASSCODE' lets the caller show the right toast.
-    const resp = await fetch(`${SUPABASE_URL}/functions/v1/edit-order`, {
+    // Edits go through the Worker's /api/edit-order route, which requires
+    // the same login cookie as the rest of the app AND checks the edit
+    // passcode server-side (it never reaches the browser); if correct, it
+    // writes using a Supabase service_role key that only the Worker holds.
+    // Throwing 'WRONG_PASSCODE' lets the caller show the right toast.
+    const resp = await fetch('/api/edit-order', {
       method: 'POST',
-      headers: {
-        apikey: SUPABASE_KEY,
-        Authorization: `Bearer ${SUPABASE_KEY}`,
-        'Content-Type': 'application/json'
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ orderId: editOrderId, passcode: editPasscode, order: orderPayload, lines })
     });
     let result = {};
@@ -1777,33 +1783,19 @@ async function logOrderToSupabase(editPasscode) {
     return;
   }
 
-  const orderResp = await fetch(`${SUPABASE_URL}/rest/v1/orders`, {
+  // New order submission also goes through the Worker (/api/orders), not
+  // directly to Supabase - the browser no longer holds any Supabase key at
+  // all. The Worker validates the payload server-side and writes with the
+  // service_role key.
+  const orderResp = await fetch('/api/orders', {
     method: 'POST',
-    headers: {
-      apikey: SUPABASE_KEY,
-      Authorization: `Bearer ${SUPABASE_KEY}`,
-      'Content-Type': 'application/json',
-      Prefer: 'return=representation'
-    },
-    body: JSON.stringify(orderPayload)
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ order: orderPayload, lines })
   });
-  if (!orderResp.ok) throw new Error('order insert failed: ' + orderResp.status);
-  const orderRows = await orderResp.json();
-  const orderId = orderRows[0].id;
-
-  if (lines.length) {
-    const linesPayload = lines.map(l => Object.assign({ order_id: orderId }, l));
-    const linesResp = await fetch(`${SUPABASE_URL}/rest/v1/order_lines`, {
-      method: 'POST',
-      headers: {
-        apikey: SUPABASE_KEY,
-        Authorization: `Bearer ${SUPABASE_KEY}`,
-        'Content-Type': 'application/json',
-        Prefer: 'return=minimal'
-      },
-      body: JSON.stringify(linesPayload)
-    });
-    if (!linesResp.ok) throw new Error('lines insert failed: ' + linesResp.status);
+  if (!orderResp.ok) {
+    let result = {};
+    try { result = await orderResp.json(); } catch (e) { /* ignore */ }
+    throw new Error(result.error || ('order insert failed: ' + orderResp.status));
   }
 }
 
@@ -2051,17 +2043,18 @@ async function bootstrapEditMode() {
   toast(bi('Chargement de la commande à modifier...', 'De te wijzigen bestelling wordt geladen...'));
 
   try {
-    const resp = await fetch(`${SUPABASE_URL}/rest/v1/orders?id=eq.${encodeURIComponent(editId)}&select=*`, {
-      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
-    });
-    if (!resp.ok) throw new Error('fetch order failed: ' + resp.status);
-    const rows = await resp.json();
-    if (!rows.length) {
+    // Edit-mode prefill now goes through the Worker's /api/orders/:id route
+    // (requires the app's login cookie) instead of a direct, unauthenticated
+    // Supabase call - previously anyone who knew (or guessed) an order id
+    // could read that order's full contents with just the public anon key.
+    const resp = await fetch(`/api/orders/${encodeURIComponent(editId)}`);
+    if (resp.status === 404) {
       toast(bi('Commande introuvable pour la modification.', 'Bestelling niet gevonden om te wijzigen.'));
       if (sendBtn) sendBtn.textContent = originalSendLabel;
       return;
     }
-    const order = rows[0];
+    if (!resp.ok) throw new Error('fetch order failed: ' + resp.status);
+    const order = await resp.json();
     if (!order.form_snapshot) {
       toast(bi("Cette commande a été enregistrée avant l'ajout de la fonction de modification et ne peut pas être rechargée automatiquement.", 'Deze bestelling werd geregistreerd vóór de wijzigingsfunctie en kan niet automatisch worden herladen.'));
       if (sendBtn) sendBtn.textContent = originalSendLabel;

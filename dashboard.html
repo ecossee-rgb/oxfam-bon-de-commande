@@ -205,8 +205,15 @@
 </div>
 
 <script>
-const SUPABASE_URL = 'https://ubqshzvbsqfekziyqxyc.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_jfEushP76J1NqW9LHeEb5A_8xNHAvba';
+// This page used to read the entire orders/order_lines tables directly from
+// Supabase with the public anon key (no filtering at all) - meaning anyone
+// who had that key, embedded right here in the page source, could pull
+// every Oxfam order with a single unauthenticated REST call. It now goes
+// through the Worker's /api/orders and /api/order-lines routes instead,
+// which require the same login cookie as the rest of the app and use a
+// Supabase service_role key that lives only in the Worker (a Cloudflare
+// Secret). RLS now denies the anon role everything on both tables, so that
+// old key wouldn't return anything anymore even if it leaked.
 
 // index.html redirects here with ?sent=1 (new order) or ?updated=1 (edit
 // saved) right after a successful submission, instead of relying on a toast
@@ -251,12 +258,8 @@ async function fetchAll() {
   statusMsg.textContent = 'Chargement des données... / Gegevens laden...';
   try {
     const [ordersResp, linesResp] = await Promise.all([
-      fetch(`${SUPABASE_URL}/rest/v1/orders?select=*&order=created_at.desc&limit=2000`, {
-        headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
-      }),
-      fetch(`${SUPABASE_URL}/rest/v1/order_lines?select=*&limit=20000`, {
-        headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
-      })
+      fetch('/api/orders'),
+      fetch('/api/order-lines')
     ]);
     if (!ordersResp.ok || !linesResp.ok) throw new Error('fetch failed');
     allOrders = await ordersResp.json();

@@ -152,8 +152,15 @@
 </div>
 
 <script>
-const SUPABASE_URL = 'https://ubqshzvbsqfekziyqxyc.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_jfEushP76J1NqW9LHeEb5A_8xNHAvba';
+// This page used to read a single order + its lines directly from Supabase
+// with the public anon key, and no check beyond having a valid-looking
+// order id in the URL - anyone who had the (public, page-source) anon key
+// could read any order this way. It now goes through the Worker's
+// /api/orders/:id and /api/order-lines routes, which require the same
+// login cookie as the rest of the app. The actual write (submit-picking)
+// used to be even more exposed - that Supabase Edge Function had no auth
+// check at all - and now goes through /api/submit-picking on the Worker
+// instead, which is both cookie-gated and validates its input server-side.
 
 function toast(msg) {
   const t = document.getElementById('toast');
@@ -187,22 +194,17 @@ async function loadOrder() {
 
   try {
     const [orderResp, linesResp] = await Promise.all([
-      fetch(`${SUPABASE_URL}/rest/v1/orders?id=eq.${encodeURIComponent(orderId)}&select=*`, {
-        headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
-      }),
-      fetch(`${SUPABASE_URL}/rest/v1/order_lines?order_id=eq.${encodeURIComponent(orderId)}&select=*&order=category.asc`, {
-        headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
-      })
+      fetch(`/api/orders/${encodeURIComponent(orderId)}`),
+      fetch(`/api/order-lines?order_id=${encodeURIComponent(orderId)}`)
     ]);
-    if (!orderResp.ok || !linesResp.ok) throw new Error('fetch failed');
-    const orders = await orderResp.json();
-    if (!orders.length) {
+    if (orderResp.status === 404) {
       document.getElementById('loadingMsg').style.display = 'none';
       document.getElementById('noOrderMsg').style.display = 'block';
       document.querySelector('#noOrderMsg p').textContent = "Commande introuvable. / Bestelling niet gevonden.";
       return;
     }
-    const order = orders[0];
+    if (!orderResp.ok || !linesResp.ok) throw new Error('fetch failed');
+    const order = await orderResp.json();
     currentLines = await linesResp.json();
 
     renderOrderSummary(order);
@@ -303,13 +305,9 @@ document.getElementById('btnSubmit').addEventListener('click', async () => {
   toast('Enregistrement en cours... / Bezig met opslaan...');
 
   try {
-    const resp = await fetch(`${SUPABASE_URL}/functions/v1/submit-picking`, {
+    const resp = await fetch('/api/submit-picking', {
       method: 'POST',
-      headers: {
-        apikey: SUPABASE_KEY,
-        Authorization: `Bearer ${SUPABASE_KEY}`,
-        'Content-Type': 'application/json'
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ orderId, pickedBy, lines })
     });
     const result = await resp.json();
