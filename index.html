@@ -1526,12 +1526,6 @@ const EMAIL_TARGET = 'yunus@oxfam.org';
 // fires when the store's order actually has informatique quantities > 0.
 const INFO_EMAIL_TARGET = 'support.atelier@oxfam.org';
 
-// TEMPORARY go-live safety net (added 2026-09-16, per Manu): every outbound
-// order email also gets CC'd here so Manu can monitor real sends during the
-// rollout. Remove this constant and the `_cc` field below once he confirms
-// the live flow is working as expected.
-const DEV_COPY_EMAIL = 'emmanuel.cossee@oxfam.org';
-
 // Shop-copy feature (item 1): send each submitted order to the ordering
 // shop's own mailbox too, in addition to EMAIL_TARGET. Mapping derived from
 // "shop emails.xlsx" (40 rows), matched 1:1 onto DATA.stores keys. Re-derive
@@ -1850,8 +1844,6 @@ function sendEmailWithAttachment(store, dateVal, opts) {
       addField('_subject', subject);
       addField('_captcha', 'false');
       addField('_template', 'box');
-      // TEMPORARY go-live safety net - see DEV_COPY_EMAIL above.
-      addField('_cc', DEV_COPY_EMAIL);
       addField('Magasin', store);
       addField('Date de livraison', dateVal);
 
