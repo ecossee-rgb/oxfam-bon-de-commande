@@ -240,10 +240,10 @@ function renderProgressBanner() {
   banner.style.display = 'block';
   if (doneCount === categories.length) {
     banner.className = 'banner ready';
-    banner.textContent = `Toutes les sections (${categories.length}/${categories.length}) sont pr&ecirc;tes. La commande peut maintenant &ecirc;tre v&eacute;rifi&eacute;e depuis le tableau de suivi. / Alle secties (${categories.length}/${categories.length}) zijn klaar. De bestelling kan nu geverifieerd worden vanuit het opvolgingsoverzicht.`;
+    banner.textContent = `Toutes les sections (${categories.length}/${categories.length}) sont prêtes. La commande peut maintenant être vérifiée depuis le tableau de suivi. / Alle secties (${categories.length}/${categories.length}) zijn klaar. De bestelling kan nu geverifieerd worden vanuit het opvolgingsoverzicht.`;
   } else {
     banner.className = 'banner';
-    banner.textContent = `${doneCount}/${categories.length} section(s) pr&ecirc;te(s). / ${doneCount}/${categories.length} secti(es) klaar.`;
+    banner.textContent = `${doneCount}/${categories.length} section(s) prête(s). / ${doneCount}/${categories.length} secti(es) klaar.`;
   }
 }
 
@@ -296,7 +296,7 @@ function makeSectionClickHandler(category, card, tableBody, nameInput, btn) {
       });
       lockSection(card, tableBody, nameInput, btn, name);
       renderProgressBanner();
-      toast('Section enregistr&eacute;e. / Sectie opgeslagen.');
+      toast('Section enregistrée. / Sectie opgeslagen.');
     } catch (e) {
       console.error(e);
       toast("Échec de l'enregistrement. Réessayez. / Opslaan is mislukt. Probeer opnieuw.");
