@@ -101,6 +101,13 @@
     background: none; border: none; color: #1e6b3a; font-size: 18px; line-height: 1;
     cursor: pointer; padding: 0 4px; flex-shrink: 0;
   }
+  .verify-cell { min-width: 150px; }
+  .verify-cell label { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: #333; margin: 0; cursor: pointer; }
+  .verify-cell input[type=checkbox] { width: 16px; height: 16px; cursor: pointer; }
+  .verify-cell input[type=checkbox]:disabled { cursor: not-allowed; }
+  .verify-progress { font-size: 11px; color: #888; margin-top: 3px; }
+  .verify-done { font-size: 11px; color: #1e6b3a; margin-top: 3px; }
+  #toast { position: fixed; top: 16px; right: 16px; background: var(--oxfam-dark); color: white; padding: 10px 16px; border-radius: 8px; font-size: 13px; display: none; z-index: 999; max-width: 340px; }
 </style>
 </head>
 <body>
@@ -182,6 +189,7 @@
             <th></th>
             <th>Préparation / Klaarmaken</th>
             <th>Actions</th>
+            <th>Vérifié / Geverifieerd</th>
           </tr>
         </thead>
         <tbody id="ordersBody"></tbody>
@@ -206,6 +214,8 @@
   </div>
 
 </div>
+
+<div id="toast"></div>
 
 <script>
 // This page used to read the entire orders/order_lines tables directly from
@@ -249,6 +259,18 @@
     window.history.replaceState({}, '', newUrl);
   }
 })();
+
+// September 2026: preparation now happens per-section on picking.html (see
+// that file's own comment for why), and this dashboard's new "Vérifié"
+// checkbox is the one deliberate step that actually emails the shop about
+// a discrepancy, via POST /api/verify-order - not picking.html anymore.
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.display = 'block';
+  setTimeout(() => t.style.display = 'none', 6000);
+}
 
 let allOrders = [];
 let allLines = [];
@@ -412,10 +434,90 @@ function pickingPill(order) {
     : '<span class="pill pill-todo">&Agrave; pr&eacute;parer / Te doen</span>';
 }
 
+// Section-completion hint for the "Vérifié" column: computed purely from
+// the lines already loaded (no extra fetch), so a reviewer can see at a
+// glance whether it's actually safe to verify yet.
+function sectionProgress(lines) {
+  if (!lines.length) return null;
+  const categories = Array.from(new Set(lines.map(l => l.category)));
+  const doneCount = categories.filter(cat =>
+    lines.filter(l => l.category === cat).every(l => l.quantity_picked !== null && l.quantity_picked !== undefined)
+  ).length;
+  return { doneCount, total: categories.length };
+}
+
+function verifyCellHtml(order, lines) {
+  if (order.verified_at) {
+    return `
+      <div class="verify-cell">
+        <label><input type="checkbox" checked disabled> V&eacute;rifi&eacute; / Geverifieerd</label>
+        <div class="verify-done">${escapeHtml(order.verified_by || '')}, ${new Date(order.verified_at).toLocaleString('fr-BE')}</div>
+      </div>
+    `;
+  }
+  const progress = sectionProgress(lines);
+  return `
+    <div class="verify-cell">
+      <label><input type="checkbox" class="verify-checkbox" data-order-id="${escapeHtml(order.id)}"> V&eacute;rifi&eacute; / Geverifieerd</label>
+      ${progress ? `<div class="verify-progress">${progress.doneCount}/${progress.total} section(s) pr&ecirc;te(s)</div>` : ''}
+    </div>
+  `;
+}
+
+async function handleVerifyCheck(checkbox) {
+  const orderId = checkbox.getAttribute('data-order-id');
+  const name = window.prompt('Votre nom (vérification) / Uw naam (verificatie) :');
+  if (name === null) { checkbox.checked = false; return; }
+  const trimmed = name.trim();
+  if (!trimmed) {
+    toast('Nom requis pour vérifier. / Naam vereist om te verifiëren.');
+    checkbox.checked = false;
+    return;
+  }
+  checkbox.disabled = true;
+  toast('Vérification en cours... / Bezig met verifiëren...');
+  try {
+    const resp = await fetch('/api/verify-order', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ orderId, verifiedBy: trimmed })
+    });
+    const result = await resp.json();
+    if (resp.status === 409) {
+      toast('Déjà vérifiée par quelqu\'un d\'autre - actualisation... / Al geverifieerd door iemand anders - vernieuwen...');
+      await fetchAll();
+      return;
+    }
+    if (!resp.ok) throw new Error(result.error || ('verify-order failed: ' + resp.status));
+
+    const order = allOrders.find(o => o.id === orderId);
+    if (order) { order.verified_at = new Date().toISOString(); order.verified_by = trimmed; }
+
+    let msg;
+    if (result.diffCount > 0) {
+      msg = result.emailSent
+        ? `Vérifié. ${result.diffCount} écart(s) détecté(s), email envoyé au magasin.`
+        : `Vérifié. ${result.diffCount} écart(s), mais l'email a échoué (${result.emailError || 'raison inconnue'}).`;
+    } else {
+      msg = 'Vérifié. Aucun écart, pas d\'email envoyé.';
+    }
+    if (result.unpickedCount > 0) {
+      msg += ` Attention : ${result.unpickedCount} ligne(s) pas encore préparée(s).`;
+    }
+    toast(msg);
+    renderAll();
+  } catch (e) {
+    console.error(e);
+    toast("Échec de la vérification. Réessayez. / Verificatie mislukt. Probeer opnieuw.");
+    checkbox.checked = false;
+    checkbox.disabled = false;
+  }
+}
+
 function renderOrdersTable(orders, allLinesForScope) {
   const body = document.getElementById('ordersBody');
   if (!orders.length) {
-    body.innerHTML = `<tr><td colspan="10" class="empty-msg">Aucune commande pour ces filtres. / Geen bestellingen voor deze filters.</td></tr>`;
+    body.innerHTML = `<tr><td colspan="11" class="empty-msg">Aucune commande pour ces filtres. / Geen bestellingen voor deze filters.</td></tr>`;
     return;
   }
 
@@ -454,9 +556,10 @@ function renderOrdersTable(orders, allLinesForScope) {
           <a href="index.html?edit=${encodeURIComponent(o.id)}" class="action-link">Modifier / Wijzigen</a>
           <a href="picking.html?order=${encodeURIComponent(o.id)}" class="action-link">Pr&eacute;parer / Klaarmaken</a>
         </td>
+        <td>${verifyCellHtml(o, lines)}</td>
       </tr>
       <tr class="details-row" id="${rowId}" style="display:none;">
-        <td colspan="10">
+        <td colspan="11">
           ${lines.length ? `
             <table class="lines-table">
               <thead><tr><th>Catégorie / Categorie</th><th>Article (FR)</th><th>Article (NL)</th><th>Quantité / Aantal</th><th>Pr&eacute;lev&eacute; / Opgehaald</th></tr></thead>
@@ -483,6 +586,12 @@ function renderOrdersTable(orders, allLinesForScope) {
     el.addEventListener('click', () => {
       const target = document.getElementById(el.getAttribute('data-target'));
       target.style.display = target.style.display === 'none' ? '' : 'none';
+    });
+  });
+
+  body.querySelectorAll('.verify-checkbox').forEach(cb => {
+    cb.addEventListener('change', () => {
+      if (cb.checked) handleVerifyCheck(cb);
     });
   });
 }

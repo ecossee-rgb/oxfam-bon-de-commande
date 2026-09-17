@@ -262,20 +262,28 @@ await test('correct passcode -> patches order, deletes+reinserts lines -> 200 ok
   assert.equal(calls.length, 3);
 });
 
-console.log('7. POST /api/submit-picking');
-await test('valid submission with a diff -> emails shop, returns diffCount/emailSent shape', async () => {
+console.log('7. POST /api/submit-picking (per-section, no email - September 2026 change)');
+await test('single line, that line is the whole order -> fullyPicked true, order PATCHed, NO email/formsubmit call', async () => {
+  const calls = [];
   mockFetch(async (url, init) => {
+    calls.push({ url, method: init.method });
+    if (url.includes('formsubmit.co')) throw new Error('submit-picking must never email directly anymore - that is apiVerifyOrder\'s job');
     if (url.includes('/rest/v1/orders?id=eq.') && !init.method) {
-      return new Response(JSON.stringify([{ id: 'oid', store_name: 'Shop Marolles', delivery_date: '2026-01-01' }]), { status: 200 });
+      return new Response(JSON.stringify([{ id: 'oid' }]), { status: 200 });
     }
-    if (url.includes('/rest/v1/order_lines?id=eq.') && init.method === 'PATCH') {
-      return new Response(JSON.stringify([{ id: 'l1', quantity: 5, quantity_picked: 3, article_fr: 'Art', article_nl: '' }]), { status: 200 });
+    if (url.includes('/rest/v1/order_lines?id=eq.') && url.includes('order_id=eq.') && init.method === 'PATCH') {
+      const sentBody = JSON.parse(init.body);
+      assert.equal(sentBody.picked_by, 'Jean');
+      return new Response(JSON.stringify([{}]), { status: 200 });
+    }
+    if (url.includes('/rest/v1/order_lines?order_id=eq.') && !init.method) {
+      // "is everything now picked" re-check
+      return new Response(JSON.stringify([{ quantity_picked: 3 }]), { status: 200 });
     }
     if (url.includes('/rest/v1/orders?id=eq.') && init.method === 'PATCH') {
+      const sentBody = JSON.parse(init.body);
+      assert.ok(sentBody.picking_completed_at, 'expected picking_completed_at to be set once fully picked');
       return new Response('[]', { status: 200 });
-    }
-    if (url.includes('formsubmit.co')) {
-      return new Response(JSON.stringify({ success: true }), { status: 200 });
     }
     throw new Error('unexpected ' + url);
   });
@@ -286,12 +294,138 @@ await test('valid submission with a diff -> emails shop, returns diffCount/email
   assert.equal(resp.status, 200);
   const body = await resp.json();
   assert.equal(body.ok, true);
-  assert.equal(body.diffCount, 1);
-  assert.equal(body.emailSent, true);
+  assert.equal(body.updatedCount, 1);
+  assert.equal(body.fullyPicked, true);
+  assert.ok(!calls.some(c => c.url.includes('formsubmit.co')));
 });
 
-await test('unauthenticated call to old-style anonymous shape still requires cookie (sanity re-check)', async () => {
+await test('partial submission (other lines of the order still unpicked) -> fullyPicked false, order NOT patched', async () => {
+  mockFetch(async (url, init) => {
+    if (url.includes('formsubmit.co')) throw new Error('should never email from submit-picking');
+    if (url.includes('/rest/v1/orders?id=eq.') && !init.method) {
+      return new Response(JSON.stringify([{ id: 'oid' }]), { status: 200 });
+    }
+    if (url.includes('/rest/v1/order_lines?id=eq.') && url.includes('order_id=eq.') && init.method === 'PATCH') {
+      return new Response(JSON.stringify([{}]), { status: 200 });
+    }
+    if (url.includes('/rest/v1/order_lines?order_id=eq.') && !init.method) {
+      // one line from a different section is still null -> not fully picked
+      return new Response(JSON.stringify([{ quantity_picked: 3 }, { quantity_picked: null }]), { status: 200 });
+    }
+    if (url.includes('/rest/v1/orders?id=eq.') && init.method === 'PATCH') {
+      throw new Error('orders should not be PATCHed when not fully picked yet');
+    }
+    throw new Error('unexpected ' + url);
+  });
+  const resp = await worker.fetch(req('/api/submit-picking', {
+    method: 'POST', cookie: validCookie,
+    body: { orderId: '11111111-1111-4111-8111-111111111111', pickedBy: 'Birgit', lines: [{ id: '22222222-2222-4222-8222-222222222222', quantity_picked: 3 }] },
+  }), env);
+  assert.equal(resp.status, 200);
+  const body = await resp.json();
+  assert.equal(body.fullyPicked, false);
+});
+
+await test('unauthenticated -> 401', async () => {
   const resp = await worker.fetch(req('/api/submit-picking', { method: 'POST', body: { orderId: 'x' } }), env);
+  assert.equal(resp.status, 401);
+});
+
+console.log('7b. POST /api/verify-order (the only place a discrepancy email is now sent)');
+await test('missing verifiedBy -> 400, supabase never called', async () => {
+  mockFetch(async () => { throw new Error('should not reach supabase'); });
+  const resp = await worker.fetch(req('/api/verify-order', {
+    method: 'POST', cookie: validCookie,
+    body: { orderId: '11111111-1111-4111-8111-111111111111' },
+  }), env);
+  assert.equal(resp.status, 400);
+  const body = await resp.json();
+  assert.equal(body.error, 'missing_verified_by');
+});
+
+await test('order not found -> 404', async () => {
+  mockFetch(async () => new Response(JSON.stringify([]), { status: 200 }));
+  const resp = await worker.fetch(req('/api/verify-order', {
+    method: 'POST', cookie: validCookie,
+    body: { orderId: '11111111-1111-4111-8111-111111111111', verifiedBy: 'Manu' },
+  }), env);
+  assert.equal(resp.status, 404);
+});
+
+await test('already verified -> 409 already_verified, no lines fetch, no email (idempotency guard)', async () => {
+  mockFetch(async (url) => {
+    if (url.includes('/rest/v1/orders?id=eq.')) {
+      return new Response(JSON.stringify([{ id: 'oid', store_name: 'Shop Marolles', delivery_date: '2026-01-01', verified_at: '2026-09-17T10:00:00.000Z' }]), { status: 200 });
+    }
+    throw new Error('should stop at the already-verified check, got ' + url);
+  });
+  const resp = await worker.fetch(req('/api/verify-order', {
+    method: 'POST', cookie: validCookie,
+    body: { orderId: '11111111-1111-4111-8111-111111111111', verifiedBy: 'Manu' },
+  }), env);
+  assert.equal(resp.status, 409);
+  const body = await resp.json();
+  assert.equal(body.error, 'already_verified');
+});
+
+await test('valid, with a diff -> emails shop once, diffCount/emailSent/unpickedCount shape', async () => {
+  mockFetch(async (url, init) => {
+    if (url.includes('/rest/v1/orders?id=eq.') && !init.method) {
+      return new Response(JSON.stringify([{ id: 'oid', store_name: 'Shop Marolles', delivery_date: '2026-01-01', verified_at: null }]), { status: 200 });
+    }
+    if (url.includes('/rest/v1/order_lines?order_id=eq.')) {
+      return new Response(JSON.stringify([
+        { quantity: 5, quantity_picked: 3, article_fr: 'Art A', article_nl: '' },   // diff
+        { quantity: 2, quantity_picked: 2, article_fr: 'Art B', article_nl: '' },   // no diff
+        { quantity: 1, quantity_picked: null, article_fr: 'Art C', article_nl: '' }, // unpicked
+      ]), { status: 200 });
+    }
+    if (url.includes('/rest/v1/orders?id=eq.') && init.method === 'PATCH') {
+      const sentBody = JSON.parse(init.body);
+      assert.equal(sentBody.verified_by, 'Manu');
+      assert.ok(sentBody.verified_at);
+      return new Response('[]', { status: 200 });
+    }
+    if (url.includes('formsubmit.co')) {
+      return new Response(JSON.stringify({ success: true }), { status: 200 });
+    }
+    throw new Error('unexpected ' + url);
+  });
+  const resp = await worker.fetch(req('/api/verify-order', {
+    method: 'POST', cookie: validCookie,
+    body: { orderId: '11111111-1111-4111-8111-111111111111', verifiedBy: 'Manu' },
+  }), env);
+  assert.equal(resp.status, 200);
+  const body = await resp.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.diffCount, 1);
+  assert.equal(body.emailSent, true);
+  assert.equal(body.unpickedCount, 1);
+});
+
+await test('valid, no diff among picked lines -> no email sent', async () => {
+  mockFetch(async (url, init) => {
+    if (url.includes('formsubmit.co')) throw new Error('should not email when there is no discrepancy');
+    if (url.includes('/rest/v1/orders?id=eq.') && !init.method) {
+      return new Response(JSON.stringify([{ id: 'oid', store_name: 'Shop Marolles', delivery_date: '2026-01-01', verified_at: null }]), { status: 200 });
+    }
+    if (url.includes('/rest/v1/order_lines?order_id=eq.')) {
+      return new Response(JSON.stringify([{ quantity: 2, quantity_picked: 2, article_fr: 'Art', article_nl: '' }]), { status: 200 });
+    }
+    if (url.includes('/rest/v1/orders?id=eq.') && init.method === 'PATCH') return new Response('[]', { status: 200 });
+    throw new Error('unexpected ' + url);
+  });
+  const resp = await worker.fetch(req('/api/verify-order', {
+    method: 'POST', cookie: validCookie,
+    body: { orderId: '11111111-1111-4111-8111-111111111111', verifiedBy: 'Manu' },
+  }), env);
+  const body = await resp.json();
+  assert.equal(body.diffCount, 0);
+  assert.equal(body.emailSent, false);
+});
+
+await test('unauthenticated -> 401', async () => {
+  const resp = await worker.fetch(req('/api/verify-order', { method: 'POST', body: { orderId: 'x' } }), env);
   assert.equal(resp.status, 401);
 });
 
