@@ -1864,16 +1864,35 @@ function sendEmailWithAttachment(store, dateVal, opts) {
       form.appendChild(fileInput);
 
       document.body.appendChild(form);
-      form.submit();
 
-      // Cross-origin iframe response can't be read (opaque), so we can't get a
-      // real success/failure signal here. Resolve optimistically after the
-      // browser has had time to dispatch the multipart request.
-      setTimeout(() => {
+      // BUG FIXED 2026-09-18 (per Manu: the shop's first live order email
+      // arrived at yunus@oxfam.org without the Excel attachment): this used
+      // to remove the form/iframe on a blind 2500ms timeout after
+      // form.submit(). If the multipart upload (which includes the
+      // attachment) hadn't finished landing on FormSubmit's server yet -
+      // slow connection, first-ever DNS/TLS handshake to formsubmit.co,
+      // larger workbook, etc. - removing the iframe mid-navigation could
+      // abort the in-flight request, and FormSubmit could end up sending a
+      // notification built from whatever partial multipart body it had
+      // already received (fields present, attachment truncated/missing).
+      // Cross-origin means the response body still can't be read, but the
+      // iframe's own `load` event DOES reliably fire once the browser has
+      // finished the request/response cycle for that navigation - so wait
+      // for that instead of guessing a fixed delay. A generous fallback
+      // timeout remains in case `load` never fires (e.g. a hard network
+      // failure), so this can't hang forever.
+      let settled = false;
+      function finish() {
+        if (settled) return;
+        settled = true;
         form.remove();
         frame.remove();
         resolve();
-      }, 2500);
+      }
+      frame.addEventListener('load', finish);
+      setTimeout(finish, 15000);
+
+      form.submit();
     } catch (e) {
       reject(e);
     }
