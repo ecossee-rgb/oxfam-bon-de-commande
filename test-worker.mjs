@@ -111,7 +111,7 @@ await test('valid order+lines -> 200 {id}, service_role key sent to supabase but
       // unexpected field must have been stripped before reaching supabase
       assert.equal(sentBody.__proto__constructor, undefined);
       assert.equal(Object.prototype.hasOwnProperty.call(sentBody, 'evil_field'), false);
-      assert.equal(sentBody.store_name, 'Shop Test');
+      assert.equal(sentBody.store_name, 'Shop Marolles');
       return new Response(JSON.stringify([{ id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' }]), { status: 201 });
     }
     if (url.includes('/rest/v1/order_lines') && init.method === 'POST') {
@@ -125,7 +125,7 @@ await test('valid order+lines -> 200 {id}, service_role key sent to supabase but
   const resp = await worker.fetch(req('/api/orders', {
     method: 'POST', cookie: validCookie,
     body: {
-      order: { store_name: 'Shop Test', evil_field: 'DROP TABLE orders', delivery_date: '2026-01-01' },
+      order: { store_name: 'Shop Marolles', evil_field: 'DROP TABLE orders', delivery_date: '2026-01-01' },
       lines: [{ category: 'Cat', article_fr: 'Article', article_nl: '', quantity: 3 }],
     },
   }), env);
@@ -148,11 +148,22 @@ await test('bad line quantity (0) -> 400 invalid_line_quantity', async () => {
   mockFetch(async () => { throw new Error('should not reach supabase'); });
   const resp = await worker.fetch(req('/api/orders', {
     method: 'POST', cookie: validCookie,
-    body: { order: { store_name: 'Shop' }, lines: [{ category: 'c', article_fr: 'a', quantity: 0 }] },
+    body: { order: { store_name: 'Shop Marolles' }, lines: [{ category: 'c', article_fr: 'a', quantity: 0 }] },
   }), env);
   assert.equal(resp.status, 400);
   const body = await resp.json();
   assert.equal(body.error, 'invalid_line_quantity');
+});
+
+await test('store_name not in the real shop list -> 400 unknown_store_name, supabase never called (Sept 2026 fix)', async () => {
+  mockFetch(async () => { throw new Error('should not reach supabase'); });
+  const resp = await worker.fetch(req('/api/orders', {
+    method: 'POST', cookie: validCookie,
+    body: { order: { store_name: '<img src=x onerror=alert(1)>', delivery_date: '2026-01-01' }, lines: [] },
+  }), env);
+  assert.equal(resp.status, 400);
+  const body = await resp.json();
+  assert.equal(body.error, 'unknown_store_name');
 });
 
 await test('malformed JSON body -> 400 invalid_json', async () => {
@@ -252,7 +263,7 @@ await test('correct passcode -> patches order, deletes+reinserts lines -> 200 ok
     body: {
       orderId: '11111111-1111-4111-8111-111111111111',
       passcode: env.EDIT_PASSCODE,
-      order: { store_name: 'Shop Test' },
+      order: { store_name: 'Shop Marolles' },
       lines: [{ category: 'c', article_fr: 'a', quantity: 1 }],
     },
   }), env);
@@ -446,7 +457,7 @@ await test('WRITE_RATE_LIMITER absent -> writes still work (graceful skip)', asy
     if (url.includes('/rest/v1/orders') && init.method === 'POST') return new Response(JSON.stringify([{ id: 'x' }]), { status: 201 });
     throw new Error('unexpected ' + url);
   });
-  const resp = await worker.fetch(req('/api/orders', { method: 'POST', cookie: validCookie, body: { order: { store_name: 'x' } } }), env);
+  const resp = await worker.fetch(req('/api/orders', { method: 'POST', cookie: validCookie, body: { order: { store_name: 'Shop Marolles' } } }), env);
   assert.equal(resp.status, 200);
 });
 

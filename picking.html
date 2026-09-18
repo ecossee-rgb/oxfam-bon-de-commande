@@ -179,6 +179,16 @@ function el(tag, attrs, children) {
   return e;
 }
 
+// Same implementation as dashboard.html's escapeHtml(). Anything from the
+// order record (store_name, verified_by, etc.) is user-supplied data, not
+// trusted markup, so it must always go through this before being placed in
+// an innerHTML template - never interpolated raw, even for fields the
+// Worker happens to validate server-side (defense in depth).
+function escapeHtml(str) {
+  if (str === null || str === undefined) return '';
+  return String(str).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
 const params = new URLSearchParams(window.location.search);
 const orderId = params.get('order');
 
@@ -220,10 +230,10 @@ async function loadOrder() {
 
 function renderOrderSummary(order) {
   document.getElementById('orderSummary').innerHTML = `
-    <strong>Magasin / Winkel :</strong> ${order.store_name || '-'}<br>
-    <strong>Date de livraison / Leveringsdatum :</strong> ${order.delivery_date || '-'}<br>
+    <strong>Magasin / Winkel :</strong> ${escapeHtml(order.store_name) || '-'}<br>
+    <strong>Date de livraison / Leveringsdatum :</strong> ${escapeHtml(order.delivery_date) || '-'}<br>
     <strong>Envoy&eacute;e le / Verzonden op :</strong> ${order.created_at ? new Date(order.created_at).toLocaleString('fr-BE') : '-'}
-    ${order.verified_at ? `<br><strong>V&eacute;rifi&eacute;e le / Geverifieerd op :</strong> ${new Date(order.verified_at).toLocaleString('fr-BE')} (${order.verified_by || '?'})` : ''}
+    ${order.verified_at ? `<br><strong>V&eacute;rifi&eacute;e le / Geverifieerd op :</strong> ${new Date(order.verified_at).toLocaleString('fr-BE')} (${escapeHtml(order.verified_by) || '?'})` : ''}
   `;
 }
 
