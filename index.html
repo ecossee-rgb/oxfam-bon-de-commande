@@ -1919,26 +1919,61 @@ document.getElementById('btnSend').addEventListener('click', async () => {
   toast(isEditMode ? bi('Enregistrement en cours...', 'Bezig met opslaan...') : bi('Envoi en cours...', 'Bezig met verzenden...'));
 
   if (isEditMode) {
-    // Editing an existing order only updates the tracked record - it does not
-    // resend the email, to avoid spamming the recipient on every edit. The
-    // passcode is verified server-side by the edit-order Edge Function.
+    // Editing an existing order updates the tracked record via the Worker
+    // (passcode checked server-side there). As of September 2026 the Worker
+    // also refuses the edit outright once the order has already been
+    // prepared or verified (see apiEditOrder) - editing replaces every line
+    // wholesale, which would otherwise silently wipe out whatever picking
+    // data the warehouse had already recorded.
     try {
       await logOrderToSupabase(editPasscode);
-      // Success: leave the form and land on the tracking dashboard with a
-      // persistent confirmation banner, rather than a toast that disappears
-      // after a few seconds while the (still-filled-in) form stays on screen
-      // looking unchanged - that ambiguity is what prompted this redirect.
-      window.location.href = 'dashboard.html?updated=1';
-      return;
     } catch (e) {
       console.error(e);
       if (e.message === 'WRONG_PASSCODE') {
         toast(bi('Code incorrect. Modifications non enregistrées.', 'Onjuiste code. Wijzigingen niet opgeslagen.'));
+      } else if (e.message === 'already_prepared') {
+        toast(bi(
+          "Cette commande a déjà été préparée (ou vérifiée) et ne peut plus être modifiée. Contactez la logistique si un changement est indispensable.",
+          'Deze bestelling is al voorbereid (of gecontroleerd) en kan niet meer gewijzigd worden. Neem contact op met de logistiek als een wijziging noodzakelijk is.'
+        ));
       } else {
         toast(bi("Échec de l'enregistrement des modifications. Réessayez plus tard.", 'Opslaan van de wijzigingen is mislukt. Probeer het later opnieuw.'));
       }
+      sendBtn.disabled = false;
+      return;
     }
-    sendBtn.disabled = false;
+
+    // The tracked record update succeeded - now (best-effort) notify the
+    // logistics team and, if relevant, the IT workshop that the order
+    // changed, so they aren't left working from a stale Excel file. Added
+    // September 2026: edits used to update only the database, silently.
+    // The shop's own copy is deliberately NOT resent here, to avoid
+    // spamming the shop's mailbox on every edit.
+    const editEmailJobs = [
+      { key: 'email', promise: sendEmailWithAttachment(store, dateVal, { subject: `Commande modifiée - ${store} - ${dateVal}` }) }
+    ];
+    if (hasInformatiqueLines()) {
+      editEmailJobs.push({
+        key: 'infoEmail',
+        promise: sendEmailWithAttachment(store, dateVal, {
+          target: INFO_EMAIL_TARGET,
+          buildWorkbook: buildInformatiqueWorkbook,
+          filename: getInformatiqueExportFilename(),
+          subject: `Commande Informatique modifiée - ${store} - ${dateVal}`
+        })
+      });
+    }
+    const editEmailSettled = await Promise.allSettled(editEmailJobs.map(j => j.promise));
+    editEmailSettled.forEach((r, i) => { if (r.status === 'rejected') console.error(editEmailJobs[i].key, r.reason); });
+
+    // Success: leave the form and land on the tracking dashboard with a
+    // persistent confirmation banner, rather than a toast that disappears
+    // after a few seconds while the (still-filled-in) form stays on screen
+    // looking unchanged - that ambiguity is what prompted this redirect.
+    // The database update is the source of truth and already succeeded
+    // above, so this redirect happens regardless of the email outcome
+    // (same best-effort treatment as the initial submission).
+    window.location.href = 'dashboard.html?updated=1';
     return;
   }
 

@@ -553,7 +553,9 @@ function renderOrdersTable(orders, allLinesForScope) {
           ${o.picking_completed_at ? `<div style="font-size:11px; color:#666; margin-top:3px;">${escapeHtml(o.picked_by || '')}</div>` : ''}
         </td>
         <td>
-          <a href="index.html?edit=${encodeURIComponent(o.id)}" class="action-link">Modifier / Wijzigen</a>
+          ${o.picking_completed_at || o.verified_at
+            ? `<span class="action-link" style="color:#999; cursor:default;" title="D&eacute;j&agrave; pr&eacute;par&eacute;e / vérifi&eacute;e, non modifiable / Al voorbereid / geverifieerd, niet meer wijzigbaar">Modifier / Wijzigen</span>`
+            : `<a href="index.html?edit=${encodeURIComponent(o.id)}" class="action-link">Modifier / Wijzigen</a>`}
           <a href="picking.html?order=${encodeURIComponent(o.id)}" class="action-link">Pr&eacute;parer / Klaarmaken</a>
         </td>
         <td>${verifyCellHtml(o, lines)}</td>

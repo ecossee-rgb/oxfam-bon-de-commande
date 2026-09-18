@@ -22,10 +22,10 @@
 //   cannot create the Access application itself.
 //
 // API SECURITY MODEL (read this before deploying):
-//   /api/* is NOT a generic Supabase proxy. There are exactly six routes
+//   /api/* is NOT a generic Supabase proxy. There are exactly seven routes
 //   (POST /api/orders, GET /api/orders, GET /api/orders/:id,
-//   GET /api/order-lines, POST /api/edit-order, POST /api/submit-picking).
-//   Every other /api/* path 404s. The browser can never supply a table
+//   GET /api/order-lines, POST /api/edit-order, POST /api/submit-picking,
+//   POST /api/verify-order). Every other /api/* path 404s. The browser can never supply a table
 //   name, REST path, SQL filter, or HTTP method that gets forwarded to
 //   Supabase - each handler builds its own fixed Supabase request and only
 //   ever inserts pre-validated values (a UUID matched against a regex, or
@@ -90,11 +90,6 @@ const WRITE_RATE_LIMIT_KEY_PREFIX = "write:";
 const SUPABASE_URL = "https://ubqshzvbsqfekziyqxyc.supabase.co";
 const UUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 const MAX_BODY_BYTES = 500_000; // 500 KB - generous for form_snapshot, blocks abuse
-
-// TEMPORARY go-live safety net (2026-09-16, per Manu): CC'd on the picking
-// écart email (see apiSubmitPicking) so he can monitor real sends during
-// the rollout. Remove once he confirms the live flow is working as expected.
-const DEV_COPY_EMAIL = "emmanuel.cossee@oxfam.org";
 
 // ---- crypto helpers ---------------------------------------------------
 
@@ -282,6 +277,13 @@ function sanitizeOrderPayload(input) {
   if (!input || typeof input !== "object") throw apiFail(400, "invalid_order");
 
   if (!isNonEmptyString(input.store_name, 200)) throw apiFail(400, "invalid_store_name");
+  // store_name isn't just a length/type check - it must be one of the real
+  // shops (SHOP_EMAILS' keys, defined below). Without this, any logged-in
+  // user could plant an arbitrary string here, which later gets rendered
+  // in picking.html/dashboard.html - defense in depth alongside escaping
+  // it on the way out (see picking.html's escapeHtml()).
+  if (!Object.prototype.hasOwnProperty.call(SHOP_EMAILS, input.store_name.trim()))
+    throw apiFail(400, "unknown_store_name");
   if (!(input.delivery_date === null || input.delivery_date === undefined || input.delivery_date === "" ||
         (typeof input.delivery_date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(input.delivery_date))))
     throw apiFail(400, "invalid_delivery_date");
@@ -527,6 +529,25 @@ async function apiEditOrder(request, env) {
   const wantDigest = await sign(env.EDIT_PASSCODE.trim(), env.COOKIE_SECRET);
   if (!constantTimeEqual(gotDigest, wantDigest)) throw apiFail(401, "invalid_passcode");
 
+  // Refuse the edit outright once the order has been prepared or verified
+  // (added September 2026). Editing replaces every order_line wholesale
+  // (delete + re-insert below), which would silently wipe out whatever
+  // quantity_picked/picked_by the warehouse already recorded - while
+  // picking_completed_at/verified_at on the order itself are untouched by
+  // this endpoint and would keep showing a stale "prepared"/"verified"
+  // status on top of the now-blank picking data. Simplest correct fix:
+  // once either is set, the order is frozen from the shop's side.
+  const existingResp = await sbFetchOrThrow(
+    `/rest/v1/orders?id=eq.${body.orderId}&select=id,picking_completed_at,verified_at`,
+    { headers: sbHeaders(env) },
+    "order_fetch_failed"
+  );
+  const existingRows = await existingResp.json();
+  if (!existingRows.length) throw apiFail(404, "not_found");
+  if (existingRows[0].picking_completed_at || existingRows[0].verified_at) {
+    throw apiFail(409, "already_prepared");
+  }
+
   const order = sanitizeOrderPayload(body.order);
   const lines = sanitizeLines(body.lines);
 
@@ -554,6 +575,17 @@ async function apiEditOrder(request, env) {
   return apiJson({ ok: true, orderId: body.orderId }, 200);
 }
 
+// Records what was picked for ONE section of an order (the lines the
+// caller sends - not necessarily all of the order's lines: different
+// people prepare different categories - Textile, Books & Broc,
+// Informatique, Économat - independently, at different times, each
+// calling this with just their own section's line ids). It does NOT send
+// any email itself: discrepancies are detected here (so they don't need
+// recomputing later) but the send is deferred to a separate, deliberate
+// review step - see apiVerifyOrder below. This split exists because a
+// single order can have several different preparers, and emailing the
+// shop after just one section's discrepancy would be misleading before
+// the rest of the order is even done.
 async function apiSubmitPicking(request, env) {
   const body = await readJsonBody(request);
   if (!isUuid(body.orderId)) throw apiFail(400, "invalid_id");
@@ -561,38 +593,96 @@ async function apiSubmitPicking(request, env) {
   const lines = sanitizePickingLines(body.lines);
 
   const orderResp = await sbFetchOrThrow(
-    `/rest/v1/orders?id=eq.${body.orderId}&select=id,store_name,delivery_date`,
+    `/rest/v1/orders?id=eq.${body.orderId}&select=id`,
+    { headers: sbHeaders(env) },
+    "order_fetch_failed"
+  );
+  const orderRows = await orderResp.json();
+  if (!orderRows.length) throw apiFail(404, "not_found");
+
+  const pickedBy = body.pickedBy.trim();
+
+  await Promise.all(
+    lines.map((line) =>
+      sbFetchOrThrow(
+        // order_id filter here (in addition to id) so a line id can never
+        // be used to patch a line belonging to a different order.
+        `/rest/v1/order_lines?id=eq.${line.id}&order_id=eq.${body.orderId}`,
+        {
+          method: "PATCH",
+          headers: sbHeaders(env),
+          body: JSON.stringify({ quantity_picked: line.quantity_picked, picked_by: pickedBy }),
+        },
+        "line_update_failed"
+      )
+    )
+  );
+
+  // Fully picked = every line on the order now has a (non-null) picked
+  // quantity, regardless of who submitted which section. Only then do we
+  // flip picking_completed_at, which is what the dashboard's "Préparation"
+  // pill and informatique.html's progress hint key off of. picked_by on
+  // the order row is best-effort/informational only now (last section to
+  // complete it) - order_lines.picked_by is the real per-section record.
+  const allLinesResp = await sbFetchOrThrow(
+    `/rest/v1/order_lines?order_id=eq.${body.orderId}&select=quantity_picked`,
+    { headers: sbHeaders(env) },
+    "lines_fetch_failed"
+  );
+  const allLines = await allLinesResp.json();
+  const fullyPicked = allLines.length > 0 && allLines.every((l) => l.quantity_picked !== null && l.quantity_picked !== undefined);
+
+  if (fullyPicked) {
+    await sbFetchOrThrow(
+      `/rest/v1/orders?id=eq.${body.orderId}`,
+      {
+        method: "PATCH",
+        headers: sbHeaders(env),
+        body: JSON.stringify({ picking_completed_at: new Date().toISOString(), picked_by: pickedBy }),
+      },
+      "order_update_failed"
+    );
+  }
+
+  return apiJson({ ok: true, updatedCount: lines.length, fullyPicked }, 200);
+}
+
+// The deliberate, separate step that actually emails the shop about a
+// discrepancy - see the note on apiSubmitPicking above for why this isn't
+// done automatically at picking time. Called once, by a reviewer (not
+// necessarily any of the section preparers), from the "Vérifié" checkbox
+// on dashboard.html. Idempotent: an order can only be verified once, so a
+// stray double-click can't double-email the shop.
+async function apiVerifyOrder(request, env) {
+  const body = await readJsonBody(request);
+  if (!isUuid(body.orderId)) throw apiFail(400, "invalid_id");
+  if (!isNonEmptyString(body.verifiedBy, 200)) throw apiFail(400, "missing_verified_by");
+  const verifiedBy = body.verifiedBy.trim();
+
+  const orderResp = await sbFetchOrThrow(
+    `/rest/v1/orders?id=eq.${body.orderId}&select=id,store_name,delivery_date,verified_at`,
     { headers: sbHeaders(env) },
     "order_fetch_failed"
   );
   const orderRows = await orderResp.json();
   if (!orderRows.length) throw apiFail(404, "not_found");
   const order = orderRows[0];
+  if (order.verified_at) throw apiFail(409, "already_verified");
 
-  const pickedBy = body.pickedBy.trim();
-
-  const results = await Promise.all(
-    lines.map(async (line) => {
-      const lineResp = await sbFetchOrThrow(
-        `/rest/v1/order_lines?id=eq.${line.id}`,
-        {
-          method: "PATCH",
-          headers: sbHeaders(env, { Prefer: "return=representation" }),
-          body: JSON.stringify({ quantity_picked: line.quantity_picked }),
-        },
-        "line_update_failed"
-      );
-      const updated = await lineResp.json();
-      return updated[0];
-    })
+  const linesResp = await sbFetchOrThrow(
+    `/rest/v1/order_lines?order_id=eq.${body.orderId}&select=quantity,quantity_picked,article_fr,article_nl`,
+    { headers: sbHeaders(env) },
+    "lines_fetch_failed"
   );
+  const lines = await linesResp.json();
 
-  const diffs = results
-    .filter((row) => row && parseFloat(row.quantity_picked) !== parseFloat(row.quantity))
-    .map((row) => ({
-      article: row.article_fr + (row.article_nl ? ` / ${row.article_nl}` : ""),
-      ordered: row.quantity,
-      picked: row.quantity_picked,
+  const unpickedCount = lines.filter((l) => l.quantity_picked === null || l.quantity_picked === undefined).length;
+  const diffs = lines
+    .filter((l) => l.quantity_picked !== null && l.quantity_picked !== undefined && parseFloat(l.quantity_picked) !== parseFloat(l.quantity))
+    .map((l) => ({
+      article: l.article_fr + (l.article_nl ? ` / ${l.article_nl}` : ""),
+      ordered: l.quantity,
+      picked: l.quantity_picked,
     }));
 
   await sbFetchOrThrow(
@@ -600,7 +690,7 @@ async function apiSubmitPicking(request, env) {
     {
       method: "PATCH",
       headers: sbHeaders(env),
-      body: JSON.stringify({ picking_completed_at: new Date().toISOString(), picked_by: pickedBy }),
+      body: JSON.stringify({ verified_at: new Date().toISOString(), verified_by: verifiedBy }),
     },
     "order_update_failed"
   );
@@ -620,18 +710,24 @@ async function apiSubmitPicking(request, env) {
           body: JSON.stringify({
             _subject: `Écarts de préparation - ${order.store_name} - ${order.delivery_date}`,
             _template: "box",
-            // TEMPORARY go-live safety net (2026-09-16, per Manu): CC every
-            // écart email so he can monitor real sends during the rollout.
-            // Remove DEV_COPY_EMAIL and this field once confirmed working.
-            _cc: DEV_COPY_EMAIL,
             Magasin: order.store_name,
             "Date de livraison": order.delivery_date,
-            "Préparé par": pickedBy,
+            "Vérifié par": verifiedBy,
             "Écarts (commandé / prélevé)": summary,
           }),
         });
         emailSent = emailResp.ok;
-        if (!emailResp.ok) emailError = "email_failed";
+        if (!emailResp.ok) {
+          // Previously silent: a non-2xx from FormSubmit left no trace
+          // anywhere, so a failed send here was undiagnosable after the
+          // fact. Log status + a bounded slice of the body (FormSubmit
+          // error pages can be full HTML) so the Worker's own Logs show
+          // *why* next time, without risking a huge log line.
+          let bodyText = "";
+          try { bodyText = (await emailResp.text()).slice(0, 500); } catch (e2) { /* ignore */ }
+          console.error("formsubmit non-ok response", emailResp.status, bodyText);
+          emailError = "email_failed";
+        }
       } catch (e) {
         console.error("formsubmit error", String(e));
         emailError = "email_failed";
@@ -641,12 +737,12 @@ async function apiSubmitPicking(request, env) {
     }
   }
 
-  return apiJson({ ok: true, diffCount: diffs.length, emailSent, emailError }, 200);
+  return apiJson({ ok: true, diffCount: diffs.length, emailSent, emailError, unpickedCount }, 200);
 }
 
 // ---- /api/* router ---------------------------------------------------
 //
-// Explicit whitelist. Six routes, nothing else. No path segment or query
+// Explicit whitelist. Seven routes, nothing else. No path segment or query
 // parameter here is ever passed to Supabase without going through one of
 // the validators above first.
 async function routeApi(request, env, url) {
@@ -671,6 +767,7 @@ async function routeApi(request, env, url) {
 
   if (path === "/api/edit-order" && method === "POST") return apiEditOrder(request, env);
   if (path === "/api/submit-picking" && method === "POST") return apiSubmitPicking(request, env);
+  if (path === "/api/verify-order" && method === "POST") return apiVerifyOrder(request, env);
 
   throw apiFail(404, "not_found");
 }
