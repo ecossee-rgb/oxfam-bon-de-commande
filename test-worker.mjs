@@ -249,10 +249,13 @@ await test('wrong passcode -> 401 invalid_passcode, supabase never called', asyn
   assert.equal(body.error, 'invalid_passcode');
 });
 
-await test('correct passcode -> patches order, deletes+reinserts lines -> 200 ok', async () => {
+await test('correct passcode, order not yet prepared/verified -> patches order, deletes+reinserts lines -> 200 ok', async () => {
   const calls = [];
   mockFetch(async (url, init) => {
     calls.push({ url, method: init.method });
+    if (url.includes('/rest/v1/orders?id=eq.') && !init.method) {
+      return new Response(JSON.stringify([{ id: 'oid', picking_completed_at: null, verified_at: null }]), { status: 200 });
+    }
     if (url.includes('/rest/v1/orders?id=eq.') && init.method === 'PATCH') return new Response('[]', { status: 200 });
     if (url.includes('/rest/v1/order_lines?order_id=eq.') && init.method === 'DELETE') return new Response(null, { status: 204 });
     if (url.includes('/rest/v1/order_lines') && init.method === 'POST') return new Response(null, { status: 201 });
@@ -270,7 +273,53 @@ await test('correct passcode -> patches order, deletes+reinserts lines -> 200 ok
   assert.equal(resp.status, 200);
   const body = await resp.json();
   assert.equal(body.ok, true);
-  assert.equal(calls.length, 3);
+  assert.equal(calls.length, 4);
+});
+
+await test('edit blocked once the order is fully prepared -> 409 already_prepared, no writes (Sept 2026 fix)', async () => {
+  mockFetch(async (url, init) => {
+    if (url.includes('/rest/v1/orders?id=eq.') && !init.method) {
+      return new Response(JSON.stringify([{ id: 'oid', picking_completed_at: '2026-09-18T10:00:00.000Z', verified_at: null }]), { status: 200 });
+    }
+    throw new Error('should not write once already_prepared: ' + url);
+  });
+  const resp = await worker.fetch(req('/api/edit-order', {
+    method: 'POST', cookie: validCookie,
+    body: { orderId: '11111111-1111-4111-8111-111111111111', passcode: env.EDIT_PASSCODE, order: { store_name: 'Shop Marolles' }, lines: [] },
+  }), env);
+  assert.equal(resp.status, 409);
+  const body = await resp.json();
+  assert.equal(body.error, 'already_prepared');
+});
+
+await test('edit blocked once the order is verified -> 409 already_prepared, no writes (Sept 2026 fix)', async () => {
+  mockFetch(async (url, init) => {
+    if (url.includes('/rest/v1/orders?id=eq.') && !init.method) {
+      return new Response(JSON.stringify([{ id: 'oid', picking_completed_at: null, verified_at: '2026-09-18T11:00:00.000Z' }]), { status: 200 });
+    }
+    throw new Error('should not write once already_prepared: ' + url);
+  });
+  const resp = await worker.fetch(req('/api/edit-order', {
+    method: 'POST', cookie: validCookie,
+    body: { orderId: '11111111-1111-4111-8111-111111111111', passcode: env.EDIT_PASSCODE, order: { store_name: 'Shop Marolles' }, lines: [] },
+  }), env);
+  assert.equal(resp.status, 409);
+  const body = await resp.json();
+  assert.equal(body.error, 'already_prepared');
+});
+
+await test('edit on unknown order id -> 404 not_found, no writes', async () => {
+  mockFetch(async (url, init) => {
+    if (url.includes('/rest/v1/orders?id=eq.') && !init.method) return new Response('[]', { status: 200 });
+    throw new Error('should not write once not_found: ' + url);
+  });
+  const resp = await worker.fetch(req('/api/edit-order', {
+    method: 'POST', cookie: validCookie,
+    body: { orderId: '11111111-1111-4111-8111-111111111111', passcode: env.EDIT_PASSCODE, order: { store_name: 'Shop Marolles' }, lines: [] },
+  }), env);
+  assert.equal(resp.status, 404);
+  const body = await resp.json();
+  assert.equal(body.error, 'not_found');
 });
 
 console.log('7. POST /api/submit-picking (per-section, no email - September 2026 change)');
