@@ -140,6 +140,25 @@
   <div id="statusMsg" class="status-msg">Chargement des données...</div>
 
   <div class="card">
+    <h2>Commandes avec articles informatique / Bestellingen met informatica-artikelen</h2>
+    <div class="table-scroll">
+      <table class="report" id="ordersTable">
+        <thead>
+          <tr>
+            <th data-sort="store_name">Magasin / Winkel</th>
+            <th data-sort="delivery_date">Date livraison / Leveringsdatum</th>
+            <th data-sort="created_at">Envoyée le / Verzonden op</th>
+            <th></th>
+            <th>Préparation / Klaarmaken</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="ordersBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
     <h2>Vue d'ensemble / Overzicht</h2>
     <div class="kpis">
       <div class="kpi"><div class="value" id="kpiOrders">-</div><div class="label">Commandes avec informatique / Bestellingen met informatica</div></div>
@@ -163,25 +182,6 @@
           </tr>
         </thead>
         <tbody id="summaryBody"></tbody>
-      </table>
-    </div>
-  </div>
-
-  <div class="card">
-    <h2>Commandes avec articles informatique / Bestellingen met informatica-artikelen</h2>
-    <div class="table-scroll">
-      <table class="report" id="ordersTable">
-        <thead>
-          <tr>
-            <th data-sort="store_name">Magasin / Winkel</th>
-            <th data-sort="delivery_date">Date livraison / Leveringsdatum</th>
-            <th data-sort="created_at">Envoyée le / Verzonden op</th>
-            <th></th>
-            <th>Préparation / Klaarmaken</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody id="ordersBody"></tbody>
       </table>
     </div>
   </div>
