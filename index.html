@@ -1341,7 +1341,13 @@ function buildWorkbook() {
     return r ? r.value : '';
   };
 
-  const resumeRows = [
+  // Everything below accumulates into ONE shared array of rows, which
+  // becomes a single sheet at the end (Résumé + every applicable product
+  // category, stacked sequentially instead of split into separate tabs).
+  // Row-style indices (title / section / header) are tracked as we go so
+  // the final sheet keeps the exact same per-row styling each section had
+  // when it was its own tab.
+  const rows = [
     [t('BON DE COMMANDE', 'BESTELBON', 'BON DE COMMANDE - BESTELBON')],
     [],
     [t('Magasin', 'Winkel'), store],
@@ -1361,19 +1367,27 @@ function buildWorkbook() {
     [t('Vidange produits OFT', 'Leeggoed producten OFT'), document.getElementById('vidangeOFT').checked ? t('Oui','Ja') : t('Non','Neen')],
     [t('Remarques logistique', 'Opmerkingen logistiek'), document.getElementById('logistiqueRemarques').value]
   ];
+  const titleStyleRows = [0];
   // Row 5 is the "LOGISTIQUE" section label - see buildResumeSheet().
-  const resumeSheet = buildResumeSheet(resumeRows, [5]);
-  XLSX.utils.book_append_sheet(wb, resumeSheet, 'Résumé');
+  const sectionStyleRows = [5];
+  const headerStyleRows = []; // { row, cols }
+  let colWidths = [{ wch: 45 }, { wch: 30 }];
+  function mergeColWidths(widths) {
+    widths.forEach((w, i) => {
+      const wch = w.wch || 0;
+      if (!colWidths[i] || (colWidths[i].wch || 0) < wch) colWidths[i] = { wch };
+    });
+  }
 
   const flags = DATA.stores[store] || {};
 
-  function addQtySheet(sheetName, headerTitle, prefix, def) {
+  function addQtyBlock(headerTitle, prefix, def) {
     const qtyRows = collectQtyRows(prefix, def, lang);
     const remarksEl = document.getElementById(`${prefix}__remarques`);
     const remarks = remarksEl ? remarksEl.value : '';
-    // Skip this sheet entirely if nothing was actually ordered in this
+    // Skip this block entirely if nothing was actually ordered in this
     // section (and no remark was left either) - the export should only
-    // contain the tabs that are relevant to this particular order.
+    // contain the sections that are relevant to this particular order.
     if (!qtyRows.length && !remarks) return;
     const isColorSection = COLOR_CHECKBOX_SECTIONS.includes(prefix);
     const articleHeader = lang === 'both' ? ['Article (FR)', 'Article (NL)'] : [t('Article', 'Artikel')];
@@ -1381,39 +1395,43 @@ function buildWorkbook() {
     if (isColorSection) header.push(t('Rouge','Rood'), t('Jaune','Geel'), t('Vert','Groen'));
     const labels = SECTION_LABELS[prefix];
     const localizedTitle = labels ? t(labels.fr, labels.nl, headerTitle) : headerTitle;
-    const rows = [[localizedTitle], [], header];
+
+    rows.push([]);
+    titleStyleRows.push(rows.length);
+    rows.push([localizedTitle]);
+    rows.push([]);
+    headerStyleRows.push({ row: rows.length, cols: header.length });
+    rows.push(header);
     qtyRows.forEach(r => rows.push(r));
     if (remarks) { rows.push([]); rows.push([t('Remarques','Opmerkingen'), remarks]); }
-    const sheet = XLSX.utils.aoa_to_sheet(rows);
+
     const articleColWidths = lang === 'both' ? [{ wch: 32 }, { wch: 32 }] : [{ wch: 40 }];
-    sheet['!cols'] = articleColWidths.concat(
+    mergeColWidths(articleColWidths.concat(
       isColorSection
         ? [{ wch: 14 }, { wch: 16 }, { wch: 10 }, { wch: 10 }, { wch: 10 }]
         : [{ wch: 14 }, { wch: 16 }]
-    );
-    xlsxStyleRow(sheet, 0, 1, XLSX_TITLE_STYLE);
-    xlsxStyleRow(sheet, 2, header.length, XLSX_HEADER_STYLE);
-    XLSX.utils.book_append_sheet(wb, sheet, sheetName.substring(0,31));
+    ));
   }
 
-  if (flags.textileCreme) addQtySheet('Textile CRÈME', DATA.textileSheets.textileCreme.label, 'textileCreme', DATA.textileSheets.textileCreme);
-  if (flags.textileMidmix) addQtySheet('Textile MIDMIX', DATA.textileSheets.textileMidmix.label, 'textileMidmix', DATA.textileSheets.textileMidmix);
-  if (flags.textileE5) addQtySheet('Textile E5-CONTAINER', DATA.textileSheets.textileE5.label, 'textileE5', DATA.textileSheets.textileE5);
-  if (flags.textileKg) addQtySheet('Textile KG', DATA.textileSheets.textileKg.label, 'textileKg', DATA.textileSheets.textileKg);
-  if (flags.textileVintage) addQtySheet('Textile VINTAGE', DATA.textileSheets.textileVintage.label, 'textileVintage', DATA.textileSheets.textileVintage);
-  if (flags.booksBroc) addQtySheet('Books&Broc', DATA.booksBroc.label, 'booksBroc', getBooksBrocDef(store));
-  if (flags.economat) addQtySheet('Économat-Marketing', DATA.economat.label, 'economat', DATA.economat);
+  if (flags.textileCreme) addQtyBlock(DATA.textileSheets.textileCreme.label, 'textileCreme', DATA.textileSheets.textileCreme);
+  if (flags.textileMidmix) addQtyBlock(DATA.textileSheets.textileMidmix.label, 'textileMidmix', DATA.textileSheets.textileMidmix);
+  if (flags.textileE5) addQtyBlock(DATA.textileSheets.textileE5.label, 'textileE5', DATA.textileSheets.textileE5);
+  if (flags.textileKg) addQtyBlock(DATA.textileSheets.textileKg.label, 'textileKg', DATA.textileSheets.textileKg);
+  if (flags.textileVintage) addQtyBlock(DATA.textileSheets.textileVintage.label, 'textileVintage', DATA.textileSheets.textileVintage);
+  if (flags.booksBroc) addQtyBlock(DATA.booksBroc.label, 'booksBroc', getBooksBrocDef(store));
+  if (flags.economat) addQtyBlock(DATA.economat.label, 'economat', DATA.economat);
 
-  // Add the Informatique tab if at least one line has an ordered quantity
+  // Add the Informatique block if at least one line has an ordered quantity
   // (hasInformatiqueLines() checks the "Commandé" column, not just any
-  // filled-in field) - same rule as the other section sheets - or if a
+  // filled-in field) - same rule as the other section blocks - or if a
   // remark was left even with nothing ordered.
   const informatiqueRemarksEl = document.getElementById('informatique__remarques');
   const informatiqueRemarks = informatiqueRemarksEl ? informatiqueRemarksEl.value : '';
   if (flags.informatique && (hasInformatiqueLines() || informatiqueRemarks)) {
-    const rows = [[t('INFORMATIQUE','INFORMATICA','INFORMATIQUE / INFORMATICA')], []];
-    const catTitleRows = [];
-    const colHeaderRows = [];
+    rows.push([]);
+    titleStyleRows.push(rows.length);
+    rows.push([t('INFORMATIQUE','INFORMATICA','INFORMATIQUE / INFORMATICA')]);
+    rows.push([]);
     let maxCols = 1;
     let firstCat = true;
     INFO_CATEGORIES.forEach((cat) => {
@@ -1422,22 +1440,24 @@ function buildWorkbook() {
       if (!catRows.length) return;
       if (!firstCat) rows.push([]);
       firstCat = false;
-      catTitleRows.push(rows.length);
+      sectionStyleRows.push(rows.length);
       rows.push([t(cat.title.fr, cat.title.nl, cat.title.both).toUpperCase()]);
       const headerLabels = cols.map(c => (lang === 'nl' ? INFO_COLUMN_LABELS_NL[c.key] : INFO_COLUMN_LABELS_FR[c.key]) || c.label);
-      colHeaderRows.push(rows.length);
+      headerStyleRows.push({ row: rows.length, cols: headerLabels.length });
       rows.push(headerLabels);
       maxCols = Math.max(maxCols, headerLabels.length);
       catRows.forEach(r => rows.push(r));
     });
     if (informatiqueRemarks) { rows.push([]); rows.push([t('Remarques','Opmerkingen'), informatiqueRemarks]); }
-    const sheet = XLSX.utils.aoa_to_sheet(rows);
-    sheet['!cols'] = [{ wch: 42 }].concat(Array(Math.max(maxCols - 1, 0)).fill({ wch: 16 }));
-    xlsxStyleRow(sheet, 0, 1, XLSX_TITLE_STYLE);
-    catTitleRows.forEach(r => xlsxStyleRow(sheet, r, 1, XLSX_SECTION_STYLE));
-    colHeaderRows.forEach(r => xlsxStyleRow(sheet, r, maxCols, XLSX_HEADER_STYLE));
-    XLSX.utils.book_append_sheet(wb, sheet, 'Informatique');
+    mergeColWidths([{ wch: 42 }].concat(Array(Math.max(maxCols - 1, 0)).fill({ wch: 16 })));
   }
+
+  const sheet = XLSX.utils.aoa_to_sheet(rows);
+  sheet['!cols'] = colWidths;
+  titleStyleRows.forEach(r => xlsxStyleRow(sheet, r, 1, XLSX_TITLE_STYLE));
+  sectionStyleRows.forEach(r => xlsxStyleRow(sheet, r, 1, XLSX_SECTION_STYLE));
+  headerStyleRows.forEach(({ row, cols }) => xlsxStyleRow(sheet, row, cols, XLSX_HEADER_STYLE));
+  XLSX.utils.book_append_sheet(wb, sheet, 'Résumé');
 
   return wb;
 }
