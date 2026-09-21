@@ -1101,6 +1101,19 @@ function buildInformatiqueCard() {
     const btn = el('button', {type:'button', class:'btn-add', id: cat.btnId, text: bi(cat.addLabel.fr, cat.addLabel.nl, cat.addLabel.both)});
     btn.onclick = () => {
       document.getElementById(`${cat.prefix}__tbody`).appendChild(deviceRow(cat.prefix, table._nextIdx++, cols));
+      // BUG FIXED 2026-09-21 (reported by Marc Bodart/Shop Namur: the
+      // "Modèle" dropdown on any row added via this button was blank).
+      // deviceRow()'s generic select-builder reads o.label for each option,
+      // but odooStockOptions entries are {value, qty} (or {value, fr, nl}
+      // for the two manual accessory entries) - none have .label, so every
+      // added row's options rendered with blank/"undefined" text. The first
+      // row never showed this because it's populated separately by
+      // refreshModeleSelects(), which correctly uses stockOptionLabel().
+      // Re-running it here (safe/idempotent - it rebuilds every matching
+      // select from the live odooStockOptions array and restores each
+      // select's previous value) fixes the new row without duplicating the
+      // formatting logic in a second place.
+      refreshModeleSelects(cat.prefix);
     };
     card.appendChild(btn);
     ensureOdooStockLoaded(cat.prefix).then(() => refreshModeleSelects(cat.prefix));
