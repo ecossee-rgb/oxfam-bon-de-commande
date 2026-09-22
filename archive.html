@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Suivi des commandes - Oxfam Secondhand</title>
+<title>Commandes archivées - Oxfam Secondhand</title>
 <!-- Loaded from jsDelivr rather than cdnjs: cdnjs has been intermittently
      returning 503 for this exact file, which silently breaks the chart
      below (no console error - Chart.js just never becomes available). -->
@@ -92,15 +92,6 @@
   canvas { max-height: 320px; }
   .status-msg { font-size: 13px; color: #666; margin-bottom: 10px; }
   .action-link { display: block; color: var(--oxfam-green); font-weight: 600; text-decoration: none; font-size: 12px; margin-bottom: 4px; }
-  .confirm-banner {
-    background: #dff3e6; border: 1px solid #9fd8b6; color: #1e6b3a;
-    border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; font-size: 14px;
-    display: flex; align-items: center; justify-content: space-between; gap: 12px;
-  }
-  .confirm-banner button {
-    background: none; border: none; color: #1e6b3a; font-size: 18px; line-height: 1;
-    cursor: pointer; padding: 0 4px; flex-shrink: 0;
-  }
   .verify-cell { min-width: 150px; }
   .verify-cell label { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: #333; margin: 0; cursor: pointer; }
   .verify-cell input[type=checkbox] { width: 16px; height: 16px; cursor: pointer; }
@@ -116,23 +107,17 @@
   <div style="display:flex; align-items:center; gap:16px;">
     <img src="./logo-oxfam.png" alt="Oxfam" style="height:56px; width:auto; background:white; border-radius:8px; padding:4px;">
     <div>
-      <h1>Suivi des commandes - Opvolging van bestellingen</h1>
-      <p>Oxfam Secondhand &mdash; toutes les commandes envoyées via le formulaire / alle bestellingen verzonden via het formulier</p>
+      <h1>Commandes archivées - Gearchiveerde bestellingen</h1>
+      <p>Commandes dont la date de livraison est passée / Bestellingen waarvan de leveringsdatum voorbij is</p>
     </div>
   </div>
   <div style="display:flex; flex-direction:column; align-items:flex-end; gap:4px;">
-    <a class="back-link" href="./index.html">&larr; Retour au formulaire / Terug naar het formulier</a>
-    <a class="back-link" href="./informatique.html">Vue informatique (atelier IT) / IT-weergave (IT-werkplaats) &rarr;</a>
-    <a class="back-link" href="./archive.html" id="archiveLink">Commandes archivées / Gearchiveerde bestellingen &rarr;</a>
+    <a class="back-link" href="./dashboard.html">&larr; Retour au suivi principal / Terug naar de hoofdopvolging</a>
+    <a class="back-link" href="./index.html">Retour au formulaire / Terug naar het formulier &rarr;</a>
   </div>
 </header>
 
 <div class="wrap">
-
-  <div id="confirmBanner" class="confirm-banner" style="display:none;">
-    <span id="confirmBannerText"></span>
-    <button type="button" id="confirmBannerClose" aria-label="Fermer / Sluiten">&times;</button>
-  </div>
 
   <div class="card">
     <h2>Filtres / Filters</h2>
@@ -167,15 +152,15 @@
   <div class="card">
     <h2>Vue d'ensemble / Overzicht</h2>
     <div class="kpis">
-      <div class="kpi"><div class="value" id="kpiOrders">-</div><div class="label">Commandes / Bestellingen</div></div>
-      <div class="kpi"><div class="value" id="kpiStores">-</div><div class="label">Magasins actifs / Actieve winkels</div></div>
+      <div class="kpi"><div class="value" id="kpiOrders">-</div><div class="label">Commandes archivées / Gearchiveerde bestellingen</div></div>
+      <div class="kpi"><div class="value" id="kpiStores">-</div><div class="label">Magasins concernés / Betrokken winkels</div></div>
       <div class="kpi"><div class="value" id="kpiQty">-</div><div class="label">Quantité totale commandée / Totaal bestelde hoeveelheid</div></div>
       <div class="kpi"><div class="value" id="kpiLast">-</div><div class="label">Dernière commande envoyée / Laatst verzonden bestelling</div></div>
     </div>
   </div>
 
   <div class="card">
-    <h2>Commandes / Bestellingen</h2>
+    <h2>Commandes archivées / Gearchiveerde bestellingen</h2>
     <div class="table-scroll">
       <table class="report" id="ordersTable">
         <thead>
@@ -219,52 +204,17 @@
 <div id="toast"></div>
 
 <script>
-// This page used to read the entire orders/order_lines tables directly from
-// Supabase with the public anon key (no filtering at all) - meaning anyone
-// who had that key, embedded right here in the page source, could pull
-// every Oxfam order with a single unauthenticated REST call. It now goes
-// through the Worker's /api/orders and /api/order-lines routes instead,
-// which require the same login cookie as the rest of the app and use a
-// Supabase service_role key that lives only in the Worker (a Cloudflare
-// Secret). RLS now denies the anon role everything on both tables, so that
-// old key wouldn't return anything anymore even if it leaked.
-
-// index.html redirects here with ?sent=1 (new order) or ?updated=1 (edit
-// saved) right after a successful submission, instead of relying on a toast
-// that disappears in a few seconds while the form page stays on screen
-// looking unchanged - shops reported that as looking like sending had
-// silently failed. Show a persistent banner instead, then strip the query
-// param so a later refresh of the dashboard doesn't keep re-showing it.
-(function showConfirmBannerFromQuery() {
-  const params = new URLSearchParams(window.location.search);
-  const banner = document.getElementById('confirmBanner');
-  const bannerText = document.getElementById('confirmBannerText');
-  let message = null;
-  if (params.has('sent')) {
-    message = 'Votre commande a bien été envoyée et enregistrée. / Uw bestelling werd succesvol verzonden en geregistreerd.';
-  } else if (params.has('updated')) {
-    message = 'Vos modifications ont bien été enregistrées. / Uw wijzigingen werden succesvol opgeslagen.';
-  }
-  if (message && banner && bannerText) {
-    bannerText.textContent = message;
-    banner.style.display = 'flex';
-    document.getElementById('confirmBannerClose').addEventListener('click', () => {
-      banner.style.display = 'none';
-    });
-  }
-  if (params.has('sent') || params.has('updated')) {
-    params.delete('sent');
-    params.delete('updated');
-    const newSearch = params.toString();
-    const newUrl = window.location.pathname + (newSearch ? `?${newSearch}` : '') + window.location.hash;
-    window.history.replaceState({}, '', newUrl);
-  }
-})();
-
-// September 2026: preparation now happens per-section on picking.html (see
-// that file's own comment for why), and this dashboard's new "Vérifié"
-// checkbox is the one deliberate step that actually emails the shop about
-// a discrepancy, via POST /api/verify-order - not picking.html anymore.
+// Archive view: exactly the same data source and rendering logic as
+// dashboard.html, but scoped to the inverse set of orders - only those
+// whose delivery_date is strictly before today. dashboard.html hides these
+// once their delivery date has passed so the active view doesn't keep
+// growing forever; they're still fully visible and actionable here (same
+// Modifier/Préparer/Vérifié actions apply).
+//
+// This page goes through the same Worker /api/orders and /api/order-lines
+// routes as dashboard.html (same login cookie, same service-role-backed
+// API) - see dashboard.html's own comment for the history of why that
+// matters.
 
 function toast(msg) {
   const t = document.getElementById('toast');
@@ -275,12 +225,10 @@ function toast(msg) {
 
 let allOrders = [];
 let allLines = [];
-// Default sort: oldest delivery date first, since that's the operationally
-// relevant date for this dashboard (which order needs preparing soonest) -
-// not the "envoyée le" submission timestamp, which is always in the past
-// the moment an order is saved and so isn't useful to sort by here.
+// Default sort: most recently passed delivery date first - the most useful
+// order for reviewing what just fell off the active dashboard.
 let sortKey = 'delivery_date';
-let sortDir = 'asc';
+let sortDir = 'desc';
 let chartInstance = null;
 
 // YYYY-MM-DD in the viewer's local timezone (matches the plain date strings
@@ -303,22 +251,16 @@ async function fetchAll() {
     const fetchedOrders = await ordersResp.json();
     const fetchedLines = await linesResp.json();
 
-    // Archiving: this dashboard only ever shows orders whose delivery date
-    // is today or later. Anything with a past delivery date is filtered out
-    // here (and its lines with it) - it's still fully accessible on
-    // archive.html, which shows exactly the inverse set. Orders with no
-    // delivery date at all are kept here (nothing to compare, so they can't
-    // be confidently called "past").
+    // Inverse of dashboard.html's filter: only orders with a delivery date
+    // strictly before today are archived here. Orders with no delivery
+    // date are never archived (nothing to compare), so they stay on the
+    // main dashboard only.
     const today = todayStr();
-    const archivedCount = fetchedOrders.filter(o => o.delivery_date && o.delivery_date < today).length;
-    allOrders = fetchedOrders.filter(o => !o.delivery_date || o.delivery_date >= today);
-    const activeIds = new Set(allOrders.map(o => o.id));
-    allLines = fetchedLines.filter(l => activeIds.has(l.order_id));
+    allOrders = fetchedOrders.filter(o => o.delivery_date && o.delivery_date < today);
+    const archivedIds = new Set(allOrders.map(o => o.id));
+    allLines = fetchedLines.filter(l => archivedIds.has(l.order_id));
 
-    statusMsg.textContent = `${allOrders.length} commande(s) chargée(s). / ${allOrders.length} bestelling(en) geladen.` +
-      (archivedCount ? ` (${archivedCount} commande(s) archivée(s), date de livraison passée. / (${archivedCount} bestelling(en) gearchiveerd, leveringsdatum verstreken.)` : '');
-    const archiveLink = document.getElementById('archiveLink');
-    if (archiveLink) archiveLink.textContent = `Commandes archivées (${archivedCount}) / Gearchiveerde bestellingen (${archivedCount}) →`;
+    statusMsg.textContent = `${allOrders.length} commande(s) archivée(s). / ${allOrders.length} bestelling(en) gearchiveerd.`;
     populateFilterOptions();
     renderAll();
   } catch (e) {
@@ -546,7 +488,7 @@ async function handleVerifyCheck(checkbox) {
 function renderOrdersTable(orders, allLinesForScope) {
   const body = document.getElementById('ordersBody');
   if (!orders.length) {
-    body.innerHTML = `<tr><td colspan="11" class="empty-msg">Aucune commande pour ces filtres. / Geen bestellingen voor deze filters.</td></tr>`;
+    body.innerHTML = `<tr><td colspan="11" class="empty-msg">Aucune commande archivée pour ces filtres. / Geen gearchiveerde bestellingen voor deze filters.</td></tr>`;
     return;
   }
 
