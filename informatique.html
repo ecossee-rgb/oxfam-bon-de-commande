@@ -40,7 +40,19 @@
   }
   header h1 { margin: 0; font-size: 22px; }
   header p { margin: 4px 0 0; font-size: 13px; opacity: 0.9; }
-  header a.back-link { color: white; font-size: 13px; opacity: 0.9; }
+  /* Same rounded/bold/uppercase button language as .btn elsewhere in the
+     app (brand book palette), recoloured white-on-green for contrast
+     against the header, and sized for touch (44px min height) rather than
+     a plain underlined text link. */
+  .btn-header {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-height: 44px; padding: 8px 16px; border-radius: 6px;
+    font-family: 'Roboto', Helvetica, Arial, sans-serif;
+    font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px;
+    background: white; color: var(--oxfam-dark); text-decoration: none;
+    border: none; cursor: pointer; white-space: nowrap;
+  }
+  .btn-header:hover { background: #eef4ea; }
   .wrap { max-width: 1200px; margin: 0 auto; padding: 20px 16px 60px; }
   .card {
     background: white;
@@ -100,7 +112,7 @@
       <p>Vue filtrée : uniquement les articles informatique de toutes les commandes. / Gefilterd overzicht: enkel de informatica-artikelen van alle bestellingen.</p>
     </div>
   </div>
-  <a class="back-link" href="./dashboard.html">&larr; Retour au suivi complet / Terug naar de volledige opvolging</a>
+  <a class="btn-header" href="./dashboard.html">&larr; Retour au suivi complet / Terug naar de volledige opvolging</a>
 </header>
 
 <div class="wrap">
