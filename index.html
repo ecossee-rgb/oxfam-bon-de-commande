@@ -461,12 +461,22 @@ function formatAllowedDays(days) {
   return { fr, nl };
 }
 
-// Delivery date must be at least 3 working days (Mon-Fri) from today.
-function computeMinDeliveryDate() {
+// Delivery date must be at least MIN_DELIVERY_DAYS working days (Mon-Fri)
+// from today - 3 for most shops, overridden per store below.
+const DEFAULT_MIN_DELIVERY_DAYS = 3;
+// Added 2026-09-28 per Manu: Shop Vintage can request delivery on shorter
+// notice (2 working days) than the usual 3.
+const MIN_DELIVERY_DAYS_OVERRIDE = {
+  'Shop Vintage': 2,
+};
+function minDeliveryDaysFor(store) {
+  return (store && MIN_DELIVERY_DAYS_OVERRIDE[store]) || DEFAULT_MIN_DELIVERY_DAYS;
+}
+function computeMinDeliveryDate(days) {
   const d = new Date();
   d.setHours(0, 0, 0, 0);
   let added = 0;
-  while (added < 3) {
+  while (added < (days || DEFAULT_MIN_DELIVERY_DAYS)) {
     d.setDate(d.getDate() + 1);
     const day = d.getDay(); // 0 = Sunday, 6 = Saturday
     if (day !== 0 && day !== 6) added++;
@@ -482,8 +492,16 @@ function formatDateISO(d) {
 function formatDateHuman(d) {
   return d.toLocaleDateString('fr-BE', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
-const MIN_DELIVERY_DATE = computeMinDeliveryDate();
-const MIN_DELIVERY_DATE_ISO = formatDateISO(MIN_DELIVERY_DATE);
+// Per-store minimum delivery date/ISO-string, replacing the old single
+// global MIN_DELIVERY_DATE/MIN_DELIVERY_DATE_ISO constants now that the
+// lead time can vary by store. Falls back to the default 3-day rule when
+// no store is selected yet (e.g. before the shop picks their store).
+function minDeliveryDateFor(store) {
+  return computeMinDeliveryDate(minDeliveryDaysFor(store));
+}
+function minDeliveryDateIsoFor(store) {
+  return formatDateISO(minDeliveryDateFor(store));
+}
 function isWeekend(dateStr) {
   // dateStr is an ISO "YYYY-MM-DD" string from the date input.
   const d = new Date(dateStr + 'T00:00:00');
@@ -497,21 +515,23 @@ function isAllowedDeliveryWeekday(dateStr, store) {
   return days.includes(d.getDay());
 }
 function isDeliveryDateValid(dateStr, store) {
-  return !!dateStr && dateStr >= MIN_DELIVERY_DATE_ISO && !isWeekend(dateStr) && isAllowedDeliveryWeekday(dateStr, store);
+  return !!dateStr && dateStr >= minDeliveryDateIsoFor(store) && !isWeekend(dateStr) && isAllowedDeliveryWeekday(dateStr, store);
 }
 function deliveryDateErrorMessage(store) {
   const days = store ? getAllowedWeekdays(store) : null;
   const lang = langFor(store);
+  const minDays = minDeliveryDaysFor(store);
+  const minDate = minDeliveryDateFor(store);
   if (days) {
     const { fr, nl } = formatAllowedDays(days);
-    const frText = `La date de livraison doit correspondre au jour de tournée de votre magasin (${fr}), et être au moins 3 jours ouvrables après aujourd'hui (à partir du ${formatDateHuman(MIN_DELIVERY_DATE)}).`;
-    const nlText = `De leveringsdatum moet overeenkomen met de rondedag van uw winkel (${nl}), en minstens 3 werkdagen na vandaag zijn (vanaf ${formatDateHuman(MIN_DELIVERY_DATE)}).`;
+    const frText = `La date de livraison doit correspondre au jour de tournée de votre magasin (${fr}), et être au moins ${minDays} jours ouvrables après aujourd'hui (à partir du ${formatDateHuman(minDate)}).`;
+    const nlText = `De leveringsdatum moet overeenkomen met de rondedag van uw winkel (${nl}), en minstens ${minDays} werkdagen na vandaag zijn (vanaf ${formatDateHuman(minDate)}).`;
     if (lang === 'fr') return frText;
     if (lang === 'nl') return nlText;
     return `${frText} / ${nlText}`;
   }
-  const frText2 = `La date de livraison doit être un jour ouvrable (lundi-vendredi), au moins 3 jours ouvrables après aujourd'hui (à partir du ${formatDateHuman(MIN_DELIVERY_DATE)}).`;
-  const nlText2 = `De leveringsdatum moet een werkdag zijn (maandag-vrijdag), minstens 3 werkdagen na vandaag (vanaf ${formatDateHuman(MIN_DELIVERY_DATE)}).`;
+  const frText2 = `La date de livraison doit être un jour ouvrable (lundi-vendredi), au moins ${minDays} jours ouvrables après aujourd'hui (à partir du ${formatDateHuman(minDate)}).`;
+  const nlText2 = `De leveringsdatum moet een werkdag zijn (maandag-vrijdag), minstens ${minDays} werkdagen na vandaag (vanaf ${formatDateHuman(minDate)}).`;
   if (lang === 'fr') return frText2;
   if (lang === 'nl') return nlText2;
   return `${frText2} / ${nlText2}`;
@@ -521,8 +541,9 @@ const deliveryDateHint = document.getElementById('deliveryDateHint');
 function updateDeliveryDateHint() {
   updateLangForStore();
   if (!deliveryDateHint) return;
-  const humanDate = formatDateHuman(MIN_DELIVERY_DATE);
   const store = storeSelect.value;
+  const humanDate = formatDateHuman(minDeliveryDateFor(store));
+  const minDays = minDeliveryDaysFor(store);
   const days = store ? getAllowedWeekdays(store) : null;
   if (days) {
     const { fr, nl } = formatAllowedDays(days);
@@ -532,8 +553,8 @@ function updateDeliveryDateHint() {
     );
   } else {
     deliveryDateHint.textContent = bi(
-      `Date la plus proche possible : ${humanDate} (minimum 3 jours ouvrables, week-ends exclus). Choisissez d'abord votre magasin pour voir ses jours de livraison.`,
-      `Vroegst mogelijke datum: ${humanDate} (minimum 3 werkdagen, weekends uitgesloten). Kies eerst uw winkel om de leverdagen te zien.`
+      `Date la plus proche possible : ${humanDate} (minimum ${minDays} jours ouvrables, week-ends exclus). Choisissez d'abord votre magasin pour voir ses jours de livraison.`,
+      `Vroegst mogelijke datum: ${humanDate} (minimum ${minDays} werkdagen, weekends uitgesloten). Kies eerst uw winkel om de leverdagen te zien.`
     );
   }
 }
@@ -556,7 +577,7 @@ if (deliveryDateInput && window.flatpickr) {
     dateFormat: 'Y-m-d',
     altInput: true,
     altFormat: 'd/m/Y',
-    minDate: MIN_DELIVERY_DATE_ISO,
+    minDate: minDeliveryDateIsoFor(storeSelect.value),
     disableMobile: true,
     disable: [buildDeliveryDateDisableFn(storeSelect.value)],
     onChange: function (selectedDates, dateStr) {
@@ -576,6 +597,7 @@ storeSelect.addEventListener('change', () => {
   const store = storeSelect.value;
   if (deliveryFP) {
     deliveryFP.set('disable', [buildDeliveryDateDisableFn(store)]);
+    deliveryFP.set('minDate', minDeliveryDateIsoFor(store));
     const val = deliveryDateInput.value;
     if (val && !isDeliveryDateValid(val, store)) {
       toast(deliveryDateErrorMessage(store));
