@@ -120,6 +120,9 @@
   .verify-cell input[type=checkbox]:disabled { cursor: not-allowed; }
   .verify-progress { font-size: 11px; color: #888; margin-top: 3px; }
   .verify-done { font-size: 11px; color: #1e6b3a; margin-top: 3px; }
+  .verify-email-failed { font-size: 11px; color: #a12b2b; margin-top: 4px; }
+  .btn-retry-email { display: block; margin-top: 4px; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 700; cursor: pointer; border: 1px solid var(--oxfam-green); background: white; color: var(--oxfam-dark); text-transform: uppercase; letter-spacing: 0.3px; }
+  .btn-retry-email:disabled { opacity: 0.6; cursor: not-allowed; }
   #toast { position: fixed; top: 16px; right: 16px; background: var(--oxfam-dark); color: white; padding: 10px 16px; border-radius: 8px; font-size: 13px; display: none; z-index: 999; max-width: 340px; }
 </style>
 </head>
@@ -490,10 +493,23 @@ function sectionProgress(lines) {
 
 function verifyCellHtml(order, lines) {
   if (order.verified_at) {
+    // notify_email_sent is null when there was nothing to email (no
+    // discrepancies), true once sent, false while a send has failed and is
+    // eligible for retry (e.g. FormSubmit rate-limited it) - see
+    // notify-email-retry-migration.sql.
+    const retryHtml = order.notify_email_sent === false
+      ? `
+        <div class="verify-email-failed">
+          Email d'&eacute;carts non envoy&eacute; / E-mail met afwijkingen niet verzonden${order.notify_email_error ? ` (${escapeHtml(order.notify_email_error)})` : ''}
+          <button type="button" class="btn-retry-email" data-order-id="${escapeHtml(order.id)}">R&eacute;essayer l'email / Opnieuw proberen</button>
+        </div>
+      `
+      : '';
     return `
       <div class="verify-cell">
         <label><input type="checkbox" checked disabled> V&eacute;rifi&eacute; / Geverifieerd</label>
         <div class="verify-done">${escapeHtml(order.verified_by || '')}, ${new Date(order.verified_at).toLocaleString('fr-BE')}</div>
+        ${retryHtml}
       </div>
     `;
   }
@@ -553,6 +569,38 @@ async function handleVerifyCheck(checkbox) {
     toast("Échec de la vérification. Réessayez. / Verificatie mislukt. Probeer opnieuw.");
     checkbox.checked = false;
     checkbox.disabled = false;
+  }
+}
+
+// Retries only the discrepancy-notification email for an order that's
+// already verified but whose email failed (notify_email_sent === false,
+// e.g. FormSubmit rate-limited the original attempt). Does not touch
+// verified_at/verified_by, and the Worker refuses to resend a mail that
+// already went out - see apiResendVerifyEmail in oxfam-password-gate-worker.js.
+async function handleResendEmail(button) {
+  const orderId = button.getAttribute('data-order-id');
+  button.disabled = true;
+  toast('Nouvel envoi en cours... / Opnieuw verzenden...');
+  try {
+    const resp = await fetch('/api/resend-verify-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ orderId })
+    });
+    const result = await resp.json();
+    if (!resp.ok) throw new Error(result.error || ('resend-verify-email failed: ' + resp.status));
+
+    const order = allOrders.find(o => o.id === orderId);
+    if (order) { order.notify_email_sent = result.emailSent; order.notify_email_error = result.emailError; }
+
+    toast(result.emailSent
+      ? 'Email envoyé au magasin. / E-mail verzonden naar de winkel.'
+      : `Échec de l'envoi (${result.emailError || 'raison inconnue'}). Réessayez plus tard. / Verzenden mislukt (${result.emailError || 'onbekende reden'}). Probeer later opnieuw.`);
+    renderAll();
+  } catch (e) {
+    console.error(e);
+    toast("Échec du nouvel envoi. Réessayez. / Opnieuw verzenden mislukt. Probeer opnieuw.");
+    button.disabled = false;
   }
 }
 
@@ -637,6 +685,10 @@ function renderOrdersTable(orders, allLinesForScope) {
     cb.addEventListener('change', () => {
       if (cb.checked) handleVerifyCheck(cb);
     });
+  });
+
+  body.querySelectorAll('.btn-retry-email').forEach(btn => {
+    btn.addEventListener('click', () => handleResendEmail(btn));
   });
 }
 
