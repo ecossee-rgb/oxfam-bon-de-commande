@@ -222,6 +222,13 @@ function isInfoCategory(cat) {
   return typeof cat === 'string' && cat.indexOf('Informatique') === 0;
 }
 
+// YYYY-MM-DD in the viewer's local timezone (matches the plain date strings
+// stored in delivery_date), same helper as dashboard.html.
+function todayStr() {
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+
 async function fetchAll() {
   const statusMsg = document.getElementById('statusMsg');
   statusMsg.textContent = 'Chargement des données... / Gegevens laden...';
@@ -231,8 +238,17 @@ async function fetchAll() {
       fetch('/api/order-lines')
     ]);
     if (!ordersResp.ok || !linesResp.ok) throw new Error('fetch failed');
-    allOrders = await ordersResp.json();
-    allLines = (await linesResp.json()).filter(l => isInfoCategory(l.category));
+    const fetchedOrders = await ordersResp.json();
+    const fetchedLines = await linesResp.json();
+
+    // Same archiving rule as dashboard.html: hide orders whose delivery date
+    // has already passed. Orders with no delivery date at all are kept
+    // (nothing to compare, so they can't be confidently called "past").
+    const today = todayStr();
+    allOrders = fetchedOrders.filter(o => !o.delivery_date || o.delivery_date >= today);
+    const activeIds = new Set(allOrders.map(o => o.id));
+    allLines = fetchedLines.filter(l => activeIds.has(l.order_id) && isInfoCategory(l.category));
+
     statusMsg.textContent = `${allLines.length} ligne(s) informatique chargée(s). / ${allLines.length} informatica-regel(s) geladen.`;
     populateFilterOptions();
     renderAll();
