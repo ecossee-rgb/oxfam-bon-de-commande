@@ -112,11 +112,7 @@
   .placeholder-msg { color: #888; font-size: 13px; font-style: italic; }
   .legend { font-size: 12px; color: #666; margin: -4px 0 14px; }
   .legend .dot { display: inline-block; width: 10px; height: 10px; border-radius: 2px; background: var(--diff-bg); border: 1px solid var(--diff-border); vertical-align: middle; margin-right: 4px; }
-  .logistics-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 7px 0; border-bottom: 1px solid #eee; font-size: 13px; }
-  .logistics-row:last-child { border-bottom: none; }
-  .logistics-row label { margin: 0; font-weight: 600; color: #333; flex: 1; }
-  .logistics-row input[type=number] { width: 90px; padding: 6px 8px; border: 1px solid #c7cfca; border-radius: 6px; font-size: 14px; text-align: center; }
-  .logistics-row input[type=number]:disabled { background: #f4f6f5; color: #888; }
+  table.items td.article-logistics { font-weight: 500; }
 </style>
 </head>
 <body>
@@ -371,12 +367,19 @@ function unlockSection(card, tableBody, nameInput, btn) {
 // (not order_lines), so this section works independently of whatever
 // item categories the order has (or doesn't have) and submits via its own
 // endpoint, /api/submit-logistics - see oxfam-password-gate-worker.js.
+//
+// Each field has two columns, same split as the item-line sections:
+// "Commandé" (orderKey, what the shop asked for - this endpoint never
+// touches it) and "Préparé" (pickedKey, what the warehouse actually
+// prepared - a separate *_picked column, added by
+// logistics-picked-columns-migration.sql, so the original request stays
+// visible after this section is confirmed).
 const LOGISTICS_FIELDS = [
-  { key: 'nb_chariots', label: "N° de chariots pour retour à Yunus / Aantal rolkarren" },
-  { key: 'nb_bacs_it', label: "N° de bacs de réparations IT / Aantal bakken reparaties IT (transport de valeur !)" },
-  { key: 'nb_sacs_monnaie', label: "N° de sacs avec de la petite monnaie / Aantal zakken kleingeld" },
-  { key: 'nb_cartons_livres', label: "Cartons vides pour livres / Kartonnen dozen voor boeken" },
-  { key: 'nb_bacs_jaunes', label: "Bacs jaunes pour déchets / Gele bakken voor afval" },
+  { orderKey: 'nb_chariots', pickedKey: 'nb_chariots_picked', label: "N° de chariots pour retour à Yunus / Aantal rolkarren" },
+  { orderKey: 'nb_bacs_it', pickedKey: 'nb_bacs_it_picked', label: "N° de bacs de réparations IT / Aantal bakken reparaties IT (transport de valeur !)" },
+  { orderKey: 'nb_sacs_monnaie', pickedKey: 'nb_sacs_monnaie_picked', label: "N° de sacs avec de la petite monnaie / Aantal zakken kleingeld" },
+  { orderKey: 'nb_cartons_livres', pickedKey: 'nb_cartons_livres_picked', label: "Cartons vides pour livres / Kartonnen dozen voor boeken" },
+  { orderKey: 'nb_bacs_jaunes', pickedKey: 'nb_bacs_jaunes_picked', label: "Bacs jaunes pour déchets / Gele bakken voor afval" },
 ];
 
 function lockLogisticsSection(card, inputs, nameInput, btn, name) {
@@ -420,17 +423,34 @@ function renderLogisticsSection(order) {
   ]);
   card.appendChild(titleRow);
 
+  const table = el('table', { class: 'items' });
+  table.appendChild(el('thead', {}, [el('tr', {}, [
+    el('th', { text: '' }),
+    el('th', { class: 'num', text: 'Commandé / Besteld' }),
+    el('th', { class: 'num', text: 'Préparé / Voorbereid' })
+  ])]));
+  const tbody = el('tbody');
   const inputs = [];
   LOGISTICS_FIELDS.forEach(f => {
-    const row = el('div', { class: 'logistics-row' });
-    row.appendChild(el('label', { text: f.label }));
-    const val = order[f.key];
-    const input = el('input', { type: 'number', min: '0', 'data-key': f.key, value: (val !== null && val !== undefined) ? String(val) : '' });
+    const orderedVal = order[f.orderKey];
+    const orderedText = (orderedVal !== null && orderedVal !== undefined) ? String(orderedVal) : '0';
+    const pickedVal = (order[f.pickedKey] !== null && order[f.pickedKey] !== undefined) ? order[f.pickedKey] : orderedVal;
+
+    const tr = el('tr');
+    tr.appendChild(el('td', { class: 'article-logistics', text: f.label }));
+    tr.appendChild(el('td', { class: 'num', text: orderedText }));
+    const tdPicked = el('td', { class: 'num' });
+    const input = el('input', { type: 'number', min: '0', 'data-key': f.orderKey, value: (pickedVal !== null && pickedVal !== undefined) ? String(pickedVal) : '' });
     if (isDone) input.disabled = true;
+    input.addEventListener('input', () => updateDiffHighlight(tr, input, orderedVal || 0));
     inputs.push(input);
-    row.appendChild(input);
-    card.appendChild(row);
+    tdPicked.appendChild(input);
+    tr.appendChild(tdPicked);
+    updateDiffHighlight(tr, input, orderedVal || 0);
+    tbody.appendChild(tr);
   });
+  table.appendChild(tbody);
+  card.appendChild(table);
 
   const footer = el('div', { class: 'section-footer' });
   const nameField = el('div', { class: 'field' }, [
@@ -470,7 +490,13 @@ function renderLogisticsSection(order) {
       const result = await resp.json();
       if (!resp.ok) throw new Error(result.error || ('submit-logistics failed: ' + resp.status));
 
-      Object.assign(currentOrder, values, { logistics_prepared_at: new Date().toISOString(), logistics_prepared_by: name });
+      // values is keyed by orderKey (nb_chariots, ...) to match what the
+      // Worker expects, but it actually holds the *prepared* amounts, which
+      // live in the parallel *_picked columns - nb_chariots itself (the
+      // shop's original request) must stay untouched locally too.
+      const pickedUpdate = {};
+      LOGISTICS_FIELDS.forEach(f => { pickedUpdate[f.pickedKey] = values[f.orderKey]; });
+      Object.assign(currentOrder, pickedUpdate, { logistics_prepared_at: new Date().toISOString(), logistics_prepared_by: name });
       lockLogisticsSection(card, inputs, nameInput, btn, name);
       toast('Section enregistrée. / Sectie opgeslagen.');
     } catch (e) {
