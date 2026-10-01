@@ -112,6 +112,11 @@
   .placeholder-msg { color: #888; font-size: 13px; font-style: italic; }
   .legend { font-size: 12px; color: #666; margin: -4px 0 14px; }
   .legend .dot { display: inline-block; width: 10px; height: 10px; border-radius: 2px; background: var(--diff-bg); border: 1px solid var(--diff-border); vertical-align: middle; margin-right: 4px; }
+  .logistics-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 7px 0; border-bottom: 1px solid #eee; font-size: 13px; }
+  .logistics-row:last-child { border-bottom: none; }
+  .logistics-row label { margin: 0; font-weight: 600; color: #333; flex: 1; }
+  .logistics-row input[type=number] { width: 90px; padding: 6px 8px; border: 1px solid #c7cfca; border-radius: 6px; font-size: 14px; text-align: center; }
+  .logistics-row input[type=number]:disabled { background: #f4f6f5; color: #888; }
 </style>
 </head>
 <body>
@@ -139,6 +144,8 @@
     </div>
 
     <div id="progressBanner" class="banner" style="display:none;"></div>
+
+    <div id="logisticsSection"></div>
 
     <p class="legend"><span class="dot"></span>Une ligne surlignée signale un écart entre la quantité command&eacute;e et la quantit&eacute; pr&eacute;lev&eacute;e. Ces &eacute;carts sont enregistr&eacute;s ici mais l'email au magasin n'est envoy&eacute; qu'apr&egrave;s v&eacute;rification depuis le tableau de suivi. / Een gemarkeerde regel toont een verschil tussen de bestelde en de opgehaalde hoeveelheid. Deze verschillen worden hier geregistreerd, maar de e-mail naar de winkel wordt pas verzonden na verificatie vanuit het opvolgingsoverzicht.</p>
 
@@ -205,6 +212,7 @@ const params = new URLSearchParams(window.location.search);
 const orderId = params.get('order');
 
 let currentLines = [];
+let currentOrder = null;
 
 async function loadOrder() {
   if (!orderId) {
@@ -227,8 +235,10 @@ async function loadOrder() {
     if (!orderResp.ok || !linesResp.ok) throw new Error('fetch failed');
     const order = await orderResp.json();
     currentLines = await linesResp.json();
+    currentOrder = order;
 
     renderOrderSummary(order);
+    renderLogisticsSection(order);
     renderLines(currentLines);
     renderProgressBanner();
 
@@ -352,6 +362,127 @@ function unlockSection(card, tableBody, nameInput, btn) {
   const status = card.querySelector('.status');
   if (status) { status.textContent = ''; status.classList.remove('done'); }
   renderProgressBanner();
+}
+
+// The "Logistique" section (return carts, IT repair bins, change bags,
+// book boxes, yellow waste bins) - the same five fields as "2. Logistique"
+// on the order form itself, shown here so the warehouse can confirm/adjust
+// the actual counts before delivery. These live on the order row directly
+// (not order_lines), so this section works independently of whatever
+// item categories the order has (or doesn't have) and submits via its own
+// endpoint, /api/submit-logistics - see oxfam-password-gate-worker.js.
+const LOGISTICS_FIELDS = [
+  { key: 'nb_chariots', label: "N° de chariots pour retour à Yunus / Aantal rolkarren" },
+  { key: 'nb_bacs_it', label: "N° de bacs de réparations IT / Aantal bakken reparaties IT (transport de valeur !)" },
+  { key: 'nb_sacs_monnaie', label: "N° de sacs avec de la petite monnaie / Aantal zakken kleingeld" },
+  { key: 'nb_cartons_livres', label: "Cartons vides pour livres / Kartonnen dozen voor boeken" },
+  { key: 'nb_bacs_jaunes', label: "Bacs jaunes pour déchets / Gele bakken voor afval" },
+];
+
+function lockLogisticsSection(card, inputs, nameInput, btn, name) {
+  card.classList.add('done');
+  nameInput.disabled = true;
+  inputs.forEach(i => i.disabled = true);
+  btn.textContent = 'Modifier cette section / Deze sectie wijzigen';
+  btn.classList.remove('btn-primary');
+  btn.classList.add('btn-link');
+  const status = card.querySelector('.status');
+  if (status) {
+    status.textContent = `Confirmé par ${name} / Bevestigd door ${name}`;
+    status.classList.add('done');
+  }
+}
+
+function unlockLogisticsSection(card, inputs, nameInput, btn) {
+  card.classList.remove('done');
+  nameInput.disabled = false;
+  inputs.forEach(i => i.disabled = false);
+  btn.textContent = 'Valider cette section / Deze sectie bevestigen';
+  btn.classList.remove('btn-link');
+  btn.classList.add('btn-primary');
+  const status = card.querySelector('.status');
+  if (status) { status.textContent = ''; status.classList.remove('done'); }
+}
+
+function renderLogisticsSection(order) {
+  const container = document.getElementById('logisticsSection');
+  container.innerHTML = '';
+
+  const isDone = !!order.logistics_prepared_at;
+  const card = el('div', { class: isDone ? 'card done' : 'card' });
+
+  const titleRow = el('div', { class: 'group-title' }, [
+    el('span', { class: 'name', text: 'Logistique / Logistiek' }),
+    el('span', {
+      class: isDone ? 'status done' : 'status',
+      text: isDone ? `Confirmé par ${order.logistics_prepared_by || '?'} / Bevestigd door ${order.logistics_prepared_by || '?'}` : ''
+    })
+  ]);
+  card.appendChild(titleRow);
+
+  const inputs = [];
+  LOGISTICS_FIELDS.forEach(f => {
+    const row = el('div', { class: 'logistics-row' });
+    row.appendChild(el('label', { text: f.label }));
+    const val = order[f.key];
+    const input = el('input', { type: 'number', min: '0', 'data-key': f.key, value: (val !== null && val !== undefined) ? String(val) : '' });
+    if (isDone) input.disabled = true;
+    inputs.push(input);
+    row.appendChild(input);
+    card.appendChild(row);
+  });
+
+  const footer = el('div', { class: 'section-footer' });
+  const nameField = el('div', { class: 'field' }, [
+    el('label', { text: 'Préparé par / Voorbereid door' }),
+    el('input', { type: 'text', placeholder: 'Votre nom / Uw naam', value: order.logistics_prepared_by || '' })
+  ]);
+  const nameInput = nameField.querySelector('input');
+  if (isDone) nameInput.disabled = true;
+  footer.appendChild(nameField);
+
+  const btn = el('button', {
+    type: 'button',
+    class: isDone ? 'btn btn-link' : 'btn btn-primary',
+    text: isDone ? 'Modifier cette section / Deze sectie wijzigen' : 'Valider cette section / Deze sectie bevestigen'
+  });
+  btn.addEventListener('click', async () => {
+    if (card.classList.contains('done')) {
+      unlockLogisticsSection(card, inputs, nameInput, btn);
+      return;
+    }
+    const name = nameInput.value.trim();
+    if (!name) {
+      toast('Merci d\'indiquer votre nom avant de valider. / Gelieve uw naam in te vullen voor u bevestigt.');
+      return;
+    }
+    const values = {};
+    inputs.forEach(i => { values[i.getAttribute('data-key')] = i.value === '' ? null : parseFloat(i.value); });
+
+    btn.disabled = true;
+    toast('Enregistrement en cours... / Bezig met opslaan...');
+    try {
+      const resp = await fetch('/api/submit-logistics', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId, preparedBy: name, values })
+      });
+      const result = await resp.json();
+      if (!resp.ok) throw new Error(result.error || ('submit-logistics failed: ' + resp.status));
+
+      Object.assign(currentOrder, values, { logistics_prepared_at: new Date().toISOString(), logistics_prepared_by: name });
+      lockLogisticsSection(card, inputs, nameInput, btn, name);
+      toast('Section enregistrée. / Sectie opgeslagen.');
+    } catch (e) {
+      console.error(e);
+      toast("Échec de l'enregistrement. Réessayez. / Opslaan is mislukt. Probeer opnieuw.");
+    }
+    btn.disabled = false;
+  });
+  footer.appendChild(btn);
+  card.appendChild(footer);
+
+  container.appendChild(card);
 }
 
 function renderLines(lines) {
