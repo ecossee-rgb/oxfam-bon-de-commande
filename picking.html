@@ -360,13 +360,15 @@ function unlockSection(card, tableBody, nameInput, btn) {
   renderProgressBanner();
 }
 
-// The "Logistique" section (return carts, IT repair bins, change bags,
-// book boxes, yellow waste bins) - the same five fields as "2. Logistique"
-// on the order form itself, shown here so the warehouse can confirm/adjust
-// the actual counts before delivery. These live on the order row directly
-// (not order_lines), so this section works independently of whatever
-// item categories the order has (or doesn't have) and submits via its own
-// endpoint, /api/submit-logistics - see oxfam-password-gate-worker.js.
+// The "Logistique" section - only the two return-container fields shown
+// here (book boxes, yellow waste bins), per Manu: chariots/bacs IT/sacs
+// monnaie are not relevant to this preparation screen and were removed
+// (October 2026). The order form (index.html) still collects all five -
+// this section just doesn't surface the other three for the warehouse to
+// confirm/adjust. These live on the order row directly (not order_lines),
+// so this section works independently of whatever item categories the
+// order has (or doesn't have) and submits via its own endpoint,
+// /api/submit-logistics - see oxfam-password-gate-worker.js.
 //
 // Each field has two columns, same split as the item-line sections:
 // "Commandé" (orderKey, what the shop asked for - this endpoint never
@@ -375,11 +377,8 @@ function unlockSection(card, tableBody, nameInput, btn) {
 // logistics-picked-columns-migration.sql, so the original request stays
 // visible after this section is confirmed).
 const LOGISTICS_FIELDS = [
-  { orderKey: 'nb_chariots', pickedKey: 'nb_chariots_picked', label: "N° de chariots pour retour à Yunus / Aantal rolkarren" },
-  { orderKey: 'nb_bacs_it', pickedKey: 'nb_bacs_it_picked', label: "N° de bacs de réparations IT / Aantal bakken reparaties IT (transport de valeur !)" },
-  { orderKey: 'nb_sacs_monnaie', pickedKey: 'nb_sacs_monnaie_picked', label: "N° de sacs avec de la petite monnaie / Aantal zakken kleingeld" },
-  { orderKey: 'nb_cartons_livres', pickedKey: 'nb_cartons_livres_picked', label: "Cartons vides pour livres / Kartonnen dozen voor boeken" },
-  { orderKey: 'nb_bacs_jaunes', pickedKey: 'nb_bacs_jaunes_picked', label: "Bacs jaunes pour déchets / Gele bakken voor afval" },
+  { orderKey: 'nb_cartons_livres', pickedKey: 'nb_cartons_livres_picked', label: "Je veux des cartons vides pour livres / Kartonnen dozen voor boeken" },
+  { orderKey: 'nb_bacs_jaunes', pickedKey: 'nb_bacs_jaunes_picked', label: "Je veux des bacs jaunes pour déchets / Gele bakken voor afval" },
 ];
 
 function lockLogisticsSection(card, inputs, nameInput, btn, name) {
