@@ -137,6 +137,16 @@
   .textile-note .textile-note-text { flex: 1; font-size: 13px; color: var(--oxfam-dark); }
   .textile-note .textile-note-text .fr { font-weight: 700; }
   .textile-note .textile-note-text .nl { font-weight: 400; color: #3f5a2e; margin-top: 2px; }
+  /* The single remaining remarks field (remarques_logistique) - made
+     deliberately prominent since it's now the only place for any note
+     about the order, and it's what gets surfaced in a banner on
+     picking.html. Same visual language as .textile-note (bordered,
+     icon) rather than a plain .field so it doesn't blend into the rest
+     of the Logistique card. */
+  .remarks-box { background: #f2f6ec; border: 2px solid var(--oxfam-green); border-radius: 8px; padding: 12px 14px; margin-top: 4px; }
+  .remarks-box label { display: flex; align-items: center; gap: 8px; font-weight: 700; color: var(--oxfam-dark); font-size: 14px; margin-bottom: 6px; }
+  .remarks-box label .remarks-icon { font-size: 18px; line-height: 1; }
+  .remarks-box textarea { min-height: 80px; border: 1px solid var(--oxfam-green); background: white; }
   .device-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 8px; }
   .device-table th { font-size: 10px; text-transform: uppercase; color: #666; padding: 4px; text-align:left; }
   .device-table td { padding: 3px; }
@@ -268,9 +278,9 @@
       <label for="vidangeOFT" id="lblVidangeOFT">Vidange produits OFT / Leeggoed producten OFT</label>
     </div>
 
-    <div class="field">
-      <label id="lblLogistiqueRemarques">Autres / remarques - Andere / opmerkingen</label>
-      <textarea id="logistiqueRemarques"></textarea>
+    <div class="remarks-box">
+      <label><span class="remarks-icon">📝</span><span id="lblLogistiqueRemarques">Remarques générales pour la préparation / Algemene opmerkingen voor de voorbereiding</span></label>
+      <textarea id="logistiqueRemarques" placeholder="Toute information utile pour la préparation de cette commande / Alle nuttige informatie voor het klaarmaken van deze bestelling"></textarea>
     </div>
   </div>
 
@@ -396,7 +406,19 @@ function applyStaticLangText() {
   if (bacsITReasonEl) bacsITReasonEl.placeholder = bi('Raison du retour', 'Reden van de terugkeer');
   setText('lblFardeCompta', bi('Farde avec la compta jointe', 'Map met boekhouding bijgevoegd'));
   setText('lblVidangeOFT', bi('Vidange produits OFT', 'Leeggoed producten OFT'));
-  setText('lblLogistiqueRemarques', bi('Autres / remarques', 'Andere / opmerkingen', 'Autres / remarques - Andere / opmerkingen'));
+  setText('lblLogistiqueRemarques', bi(
+    'Remarques générales pour la préparation',
+    'Algemene opmerkingen voor de voorbereiding',
+    'Remarques générales pour la préparation / Algemene opmerkingen voor de voorbereiding'
+  ));
+  const logistiqueRemarquesEl = document.getElementById('logistiqueRemarques');
+  if (logistiqueRemarquesEl) {
+    logistiqueRemarquesEl.placeholder = bi(
+      'Toute information utile pour la préparation de cette commande',
+      'Alle nuttige informatie voor het klaarmaken van deze bestelling',
+      'Toute information utile pour la préparation de cette commande / Alle nuttige informatie voor het klaarmaken van deze bestelling'
+    );
+  }
   setText('noSectionsText', bi(
     'Choisissez votre magasin ci-dessus pour afficher les onglets qui le concernent (textile, books & broc, économat, informatique).',
     'Kies hierboven uw winkel om de tabbladen te tonen die op u van toepassing zijn (textiel, books & broc, economaat, informatica).'
@@ -881,10 +903,6 @@ function buildSimpleQtyCard(key, title, sheetName, items, note) {
   });
   table.appendChild(tbody);
   card.appendChild(table);
-  const remarksField = el('div', {class:'field'});
-  remarksField.appendChild(el('label', {text: bi('Remarques','Opmerkingen')}));
-  remarksField.appendChild(el('textarea', {id:`${key}__remarques`}));
-  card.appendChild(remarksField);
   return card;
 }
 
@@ -909,10 +927,6 @@ function buildTextileCard(key, def) {
     card.appendChild(el('div', {class:'legend', html: bi(legendFr, legendNl, `${legendFr} / ${legendNl}`)}));
   }
   card.appendChild(buildQtyTable(key, def.groups, {collapsible: key === 'economat'}));
-  const remarksField = el('div', {class:'field'});
-  remarksField.appendChild(el('label', {text: bi('Remarques','Opmerkingen')}));
-  remarksField.appendChild(el('textarea', {id:`${key}__remarques`}));
-  card.appendChild(remarksField);
   return card;
 }
 
@@ -1141,11 +1155,6 @@ function buildInformatiqueCard() {
     card.appendChild(btn);
     ensureOdooStockLoaded(cat.prefix).then(() => refreshModeleSelects(cat.prefix));
   });
-
-  const remarksField = el('div', {class:'field'});
-  remarksField.appendChild(el('label', {text: bi('Remarques','Opmerkingen')}));
-  remarksField.appendChild(el('textarea', {id:'informatique__remarques'}));
-  card.appendChild(remarksField);
 
   return card;
 }
@@ -1388,7 +1397,7 @@ function buildWorkbook() {
     [t('Bacs jaunes pour déchets (commandé)', 'Gele bakken voor afval (besteld)'), document.getElementById('nbBacsJaunes').value],
     [t('Farde avec la compta jointe', 'Map met boekhouding bijgevoegd'), document.getElementById('fardeCompta').checked ? t('Oui','Ja') : t('Non','Neen')],
     [t('Vidange produits OFT', 'Leeggoed producten OFT'), document.getElementById('vidangeOFT').checked ? t('Oui','Ja') : t('Non','Neen')],
-    [t('Remarques logistique', 'Opmerkingen logistiek'), document.getElementById('logistiqueRemarques').value]
+    [t('Remarques générales', 'Algemene opmerkingen'), document.getElementById('logistiqueRemarques').value]
   ];
   const titleStyleRows = [0];
   // Row 5 is the "LOGISTIQUE" section label - see buildResumeSheet().
@@ -1406,12 +1415,10 @@ function buildWorkbook() {
 
   function addQtyBlock(headerTitle, prefix, def) {
     const qtyRows = collectQtyRows(prefix, def, lang);
-    const remarksEl = document.getElementById(`${prefix}__remarques`);
-    const remarks = remarksEl ? remarksEl.value : '';
     // Skip this block entirely if nothing was actually ordered in this
-    // section (and no remark was left either) - the export should only
-    // contain the sections that are relevant to this particular order.
-    if (!qtyRows.length && !remarks) return;
+    // section - the export should only contain the sections that are
+    // relevant to this particular order.
+    if (!qtyRows.length) return;
     const isColorSection = COLOR_CHECKBOX_SECTIONS.includes(prefix);
     const articleHeader = lang === 'both' ? ['Article (FR)', 'Article (NL)'] : [t('Article', 'Artikel')];
     const header = articleHeader.concat([t('Commandé', 'Besteld'), t('Livré (Yunus)', 'Geleverd (Yunus)', 'Livré / Geleverd (Yunus)')]);
@@ -1426,7 +1433,6 @@ function buildWorkbook() {
     headerStyleRows.push({ row: rows.length, cols: header.length });
     rows.push(header);
     qtyRows.forEach(r => rows.push(r));
-    if (remarks) { rows.push([]); rows.push([t('Remarques','Opmerkingen'), remarks]); }
 
     const articleColWidths = lang === 'both' ? [{ wch: 32 }, { wch: 32 }] : [{ wch: 40 }];
     mergeColWidths(articleColWidths.concat(
@@ -1446,11 +1452,8 @@ function buildWorkbook() {
 
   // Add the Informatique block if at least one line has an ordered quantity
   // (hasInformatiqueLines() checks the "Commandé" column, not just any
-  // filled-in field) - same rule as the other section blocks - or if a
-  // remark was left even with nothing ordered.
-  const informatiqueRemarksEl = document.getElementById('informatique__remarques');
-  const informatiqueRemarks = informatiqueRemarksEl ? informatiqueRemarksEl.value : '';
-  if (flags.informatique && (hasInformatiqueLines() || informatiqueRemarks)) {
+  // filled-in field) - same rule as the other section blocks.
+  if (flags.informatique && hasInformatiqueLines()) {
     rows.push([]);
     titleStyleRows.push(rows.length);
     rows.push([t('INFORMATIQUE','INFORMATICA','INFORMATIQUE / INFORMATICA')]);
@@ -1471,7 +1474,6 @@ function buildWorkbook() {
       maxCols = Math.max(maxCols, headerLabels.length);
       catRows.forEach(r => rows.push(r));
     });
-    if (informatiqueRemarks) { rows.push([]); rows.push([t('Remarques','Opmerkingen'), informatiqueRemarks]); }
     mergeColWidths([{ wch: 42 }].concat(Array(Math.max(maxCols - 1, 0)).fill({ wch: 16 })));
   }
 
@@ -1546,9 +1548,6 @@ function buildInformatiqueWorkbook() {
     maxCols = Math.max(maxCols, headerLabels.length);
     collectDeviceRows(cat.prefix, cols).forEach(r => rows.push(r));
   });
-  const infoRemarksEl = document.getElementById('informatique__remarques');
-  const infoRemarks = infoRemarksEl ? infoRemarksEl.value : '';
-  if (infoRemarks) { rows.push([]); rows.push([t('Remarques','Opmerkingen'), infoRemarks]); }
   const infoSheet = XLSX.utils.aoa_to_sheet(rows);
   infoSheet['!cols'] = [{ wch: 42 }].concat(Array(Math.max(maxCols - 1, 0)).fill({ wch: 16 }));
   xlsxStyleRow(infoSheet, 0, 1, XLSX_TITLE_STYLE);
