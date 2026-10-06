@@ -1882,17 +1882,144 @@ async function logOrderToSupabase(editPasscode) {
   // directly to Supabase - the browser no longer holds any Supabase key at
   // all. The Worker validates the payload server-side and writes with the
   // service_role key.
-  const orderResp = await fetch('/api/orders', {
+  //
+  // October 2026 (after Wilrijk and Vilvoorde both reported "email sent but
+  // registration failed"): the order gets its UUID here, in the browser, and
+  // the whole payload is kept as a "pending registration" until the Worker
+  // confirms it. That makes the call safely retryable - the Worker treats a
+  // repeated clientOrderId as the same order, never a second one - so we
+  // retry automatically on network errors/5xx/429, and if every attempt
+  // fails the shop gets a "register again" button instead of having to
+  // resubmit (which would resend all the emails). See registerNewOrder().
+  const pending = {
+    clientOrderId: newClientOrderId(),
+    order: orderPayload,
+    lines,
+    store,
+    dateVal,
+    savedAt: Date.now()
+  };
+  savePendingRegistration(pending);
+  await registerNewOrder(pending);
+}
+
+// ---- Resilient registration of a new order (October 2026) ----------------
+
+const PENDING_REG_KEY = 'oxfam_pending_order_registration';
+const PENDING_REG_MAX_AGE_MS = 7 * 24 * 3600 * 1000;
+const NEW_ORDER_RETRY_DELAYS_MS = [0, 1500, 4000];
+
+function newClientOrderId() {
+  if (window.crypto && typeof window.crypto.randomUUID === 'function') return window.crypto.randomUUID();
+  const b = new Uint8Array(16);
+  window.crypto.getRandomValues(b);
+  b[6] = (b[6] & 0x0f) | 0x40;
+  b[8] = (b[8] & 0x3f) | 0x80;
+  const h = Array.from(b, x => x.toString(16).padStart(2, '0')).join('');
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+}
+
+function savePendingRegistration(p) {
+  window.__pendingRegistration = p;
+  try { localStorage.setItem(PENDING_REG_KEY, JSON.stringify(p)); } catch (e) { /* storage blocked: in-memory copy still works for this page view */ }
+}
+function clearPendingRegistration() {
+  window.__pendingRegistration = null;
+  try { localStorage.removeItem(PENDING_REG_KEY); } catch (e) { /* ignore */ }
+}
+function loadPendingRegistration() {
+  try {
+    const raw = localStorage.getItem(PENDING_REG_KEY);
+    if (!raw) return null;
+    const p = JSON.parse(raw);
+    if (!p || !p.clientOrderId || !p.order || !Array.isArray(p.lines)) return null;
+    if (!p.savedAt || Date.now() - p.savedAt > PENDING_REG_MAX_AGE_MS) { localStorage.removeItem(PENDING_REG_KEY); return null; }
+    return p;
+  } catch (e) { return null; }
+}
+
+async function postNewOrderOnce(pending) {
+  const resp = await fetch('/api/orders', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ order: orderPayload, lines })
+    body: JSON.stringify({ clientOrderId: pending.clientOrderId, order: pending.order, lines: pending.lines })
   });
-  if (!orderResp.ok) {
+  if (!resp.ok) {
     let result = {};
-    try { result = await orderResp.json(); } catch (e) { /* ignore */ }
-    throw new Error(result.error || ('order insert failed: ' + orderResp.status));
+    try { result = await resp.json(); } catch (e) { /* ignore */ }
+    const err = new Error(result.error || ('order insert failed: ' + resp.status));
+    err.status = resp.status;
+    throw err;
   }
 }
+
+// A network failure (fetch itself rejects, no .status), a server error or a
+// rate limit are worth retrying; a 4xx (bad payload, expired login) is not.
+function isRetryableOrderError(e) {
+  return e.status === undefined || e.status >= 500 || e.status === 429;
+}
+
+async function registerNewOrder(pending) {
+  let lastErr = null;
+  for (const delay of NEW_ORDER_RETRY_DELAYS_MS) {
+    if (delay) await new Promise(r => setTimeout(r, delay));
+    try {
+      await postNewOrderOnce(pending);
+      clearPendingRegistration();
+      return;
+    } catch (e) {
+      lastErr = e;
+      if (!isRetryableOrderError(e)) break;
+    }
+  }
+  throw lastErr;
+}
+
+// Persistent banner shown when the email went out but the order isn't
+// registered in the tracking yet. Retries ONLY the registration - no email is
+// resent. Also shown on page load if an earlier session left one pending.
+function showRegisterRetryBanner(pending) {
+  const old = document.getElementById('registerRetryBox');
+  if (old) old.remove();
+  const box = document.createElement('div');
+  box.id = 'registerRetryBox';
+  box.style.cssText = 'margin:14px 0;padding:14px 16px;border:2px solid #f0c674;background:#fff3cd;border-radius:10px;font-size:14px;line-height:1.45;';
+  const msg = document.createElement('div');
+  msg.textContent = bi(
+    `Votre commande (${pending.store}, livraison ${pending.dateVal}) a bien été envoyée par email, mais elle n'est pas encore enregistrée dans le suivi des commandes. Ne la renvoyez pas : cliquez sur le bouton ci-dessous, aucun nouvel email ne sera envoyé.`,
+    `Uw bestelling (${pending.store}, levering ${pending.dateVal}) is per e-mail verzonden, maar nog niet geregistreerd in de bestelopvolging. Verstuur ze niet opnieuw: klik op de knop hieronder, er wordt geen nieuwe e-mail verstuurd.`
+  );
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.style.cssText = 'margin-top:10px;padding:9px 16px;border:0;border-radius:8px;background:#2e7d32;color:#fff;font-weight:700;cursor:pointer;';
+  btn.textContent = bi("Réessayer l'enregistrement", 'Registratie opnieuw proberen');
+  btn.addEventListener('click', async () => {
+    btn.disabled = true;
+    try {
+      await registerNewOrder(pending);
+      window.location.href = 'dashboard.html?sent=1';
+    } catch (e) {
+      console.error(e);
+      btn.disabled = false;
+      toast(bi(
+        "L'enregistrement a encore échoué. Vérifiez votre connexion et réessayez dans un instant ; si cela persiste, prévenez la logistique (le fichier Excel est déjà chez eux par email).",
+        'De registratie is opnieuw mislukt. Controleer uw verbinding en probeer zo meteen opnieuw; blijft het mislukken, verwittig dan de logistiek (het Excel-bestand hebben zij al per e-mail ontvangen).'
+      ));
+    }
+  });
+  box.appendChild(msg);
+  box.appendChild(btn);
+  const anchor = document.getElementById('btnSend');
+  anchor.parentNode.insertBefore(box, anchor);
+  box.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+// If an earlier visit left an unregistered order behind (tab closed, laptop
+// slept, connection died for good), offer to finish it now.
+window.addEventListener('load', () => {
+  const p = loadPendingRegistration();
+  if (p && !window.__editOrderId) showRegisterRetryBanner(p);
+});
 
 // FormSubmit's /ajax/ endpoint does not deliver file attachments (documented
 // behaviour: attachments require a genuine multipart/form-data <form> POST).
@@ -2154,12 +2281,22 @@ document.getElementById('btnSend').addEventListener('click', async () => {
   } else if (emailAttempted && !dbOk) {
     console.error(outcomes.db.reason);
     logSecondaryFailures();
-    toast(bi("Email envoyé, mais l'enregistrement dans le suivi des commandes a échoué. Réessayez plus tard.", "E-mail verzonden, maar de registratie in de bestelopvolging is mislukt. Probeer het later opnieuw.") + infoSuffix() + shopSuffix());
+    // The emails are out, so resubmitting the form would only duplicate them.
+    // Keep the send button disabled and offer a registration-only retry
+    // instead (the pending order is already saved by logOrderToSupabase).
+    toast(bi("Email envoyé, mais l'enregistrement dans le suivi des commandes n'a pas abouti. Ne renvoyez pas la commande : utilisez le bouton « Réessayer l'enregistrement ».", "E-mail verzonden, maar de registratie in de bestelopvolging is niet gelukt. Verstuur de bestelling niet opnieuw: gebruik de knop « Registratie opnieuw proberen »."));
+    if (window.__pendingRegistration) {
+      showRegisterRetryBanner(window.__pendingRegistration);
+      return;
+    }
   } else if (!emailAttempted && dbOk) {
     console.error(outcomes.email.reason);
     toast(bi("Enregistré dans le suivi des commandes, mais l'envoi de l'email a échoué. Réessayez, ou téléchargez une copie et envoyez-la manuellement.", "Geregistreerd in de bestelopvolging, maar het verzenden van de e-mail is mislukt. Probeer opnieuw, of download een kopie en verstuur deze handmatig.") + infoSuffix() + shopSuffix());
   } else {
     console.error(outcomes.email.reason, outcomes.db.reason);
+    // Nothing was emailed, so the shop will resubmit the whole form: drop the
+    // pending registration so it isn't offered later as a duplicate.
+    clearPendingRegistration();
     toast(bi("Échec de l'envoi et de l'enregistrement. Réessayez, ou téléchargez une copie et envoyez-la manuellement.", "Verzenden en registreren mislukt. Probeer opnieuw, of download een kopie en verstuur deze handmatig.") + infoSuffix() + shopSuffix());
   }
 
