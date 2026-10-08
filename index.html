@@ -1550,6 +1550,24 @@ function hasInformatiqueLines() {
   });
 }
 
+// Informatique rows that have something filled in (model, OS, remark...)
+// but no "Commandé" quantity above 0. Those rows used to appear in the
+// Excel files but were silently left out of the saved order, the
+// dashboard and the Informatique email. Returns the category titles
+// concerned so the shop can fix them before sending.
+function informatiqueRowsMissingQty() {
+  const store = storeSelect.value;
+  const flags = DATA.stores[store] || {};
+  if (!flags.informatique) return [];
+  const bad = [];
+  INFO_CATEGORIES.forEach(cat => {
+    const cols = infoColumns(cat);
+    const qtyIdx = cols.findIndex(c => c.key === 'commande');
+    if (collectDeviceRows(cat.prefix, cols).some(r => !(parseFloat(r[qtyIdx]) > 0))) bad.push(cat.title.fr);
+  });
+  return bad;
+}
+
 // Same "Résumé" + "Informatique" sheets as the full export, but nothing
 // else - this is what gets attached to the extra email sent to
 // INFO_EMAIL_TARGET so that recipient only ever sees informatique items.
@@ -2029,6 +2047,15 @@ document.getElementById('btnSend').addEventListener('click', async () => {
   }
   if (!document.querySelector('input[name="wantDelivery"]:checked')) {
     toast(bi('Merci de répondre à la question "Je veux une livraison".', 'Gelieve de vraag "Ik wil een levering" te beantwoorden.'));
+    return;
+  }
+
+  const missingQty = informatiqueRowsMissingQty();
+  if (missingQty.length) {
+    toast(bi(
+      'Informatique : une ligne n\'a pas de quantité (' + missingQty.join(', ') + '). Indiquez la quantité « Commandé » ou videz la ligne.',
+      'Informatica: een regel heeft geen aantal (' + missingQty.join(', ') + '). Vul het aantal « Besteld » in of maak de regel leeg.'
+    ));
     return;
   }
 
