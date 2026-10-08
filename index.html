@@ -192,7 +192,6 @@
 
 <div class="wrap">
 
-  <div id="editBanner" style="display:none; background:#fff3cd; border:1px solid #ffe08a; color:#664d03; border-radius:8px; padding:12px 16px; margin-bottom:16px; font-size:13px;"></div>
 
   <div class="card" id="card1">
     <h2><span class="h2-text" id="card1Title">1. Magasin &amp; livraison / Winkel &amp; levering</span></h2>
@@ -425,9 +424,7 @@ function applyStaticLangText() {
   ));
   setText('btnReset', bi('Réinitialiser', 'Reset'));
   setText('btnExport', bi('Télécharger une copie (.xlsx)', 'Kopie downloaden (.xlsx)'));
-  // btnSend's text is also overwritten by bootstrapEditMode() for the
-  // loading/edit-mode states - that happens after this, so it always wins.
-  if (!window.__editOrderId) setText('btnSend', bi('Envoyer le bon de commande par email', 'Bestelbon per e-mail versturen'));
+  setText('btnSend', bi('Envoyer le bon de commande par email', 'Bestelbon per e-mail versturen'));
 }
 
 // Which weekday(s) each shop's delivery round passes by, from the internal
@@ -1675,11 +1672,8 @@ const SHOP_COPY_ENABLED = true;
 // (Redeploy trigger 2026-08-06 v2: GitHub Pages deploys for this repo have
 // repeatedly hung and timed out around the ~10 minute mark - this comment
 // forces yet another fresh commit/deployment attempt.)
-// The edit passcode used to be checked here client-side (a hardcoded
-// EDIT_PASSCODE constant), which GitGuardian correctly flagged as a leaked
-// secret - anyone could read it straight out of the page source. The check
-// now happens server-side in the Cloudflare Worker's /api/edit-order route
-// (see logOrderToSupabase below). All order data (reads and writes) now goes
+// Orders are final once submitted: the edit feature (and its edit passcode)
+// was removed in October 2026. All order data (reads and writes) goes
 // through the same-origin /api/* endpoints on the Worker that already gates
 // this whole app behind a login, using a Supabase service_role key that
 // lives only in the Worker (a Cloudflare Secret, never shipped to the
@@ -1760,84 +1754,13 @@ function collectFormSnapshot() {
   return { fields, radioGroups, deviceRowCounts };
 }
 
-async function applyFormSnapshot(snapshot) {
-  if (!snapshot) return;
-
-  // The "Modèle" dropdowns in the Informatique section are populated live
-  // from Odoo; make sure that data has arrived (and the already-rendered
-  // selects have been refreshed with it) before we try to select a value.
-  const infoPrefixes = INFO_CATEGORIES.map(c => c.prefix);
-  await Promise.all(infoPrefixes.map(ensureOdooStockLoaded));
-  infoPrefixes.forEach(refreshModeleSelects);
-
-  const addButtonIds = {};
-  INFO_CATEGORIES.forEach(c => { addButtonIds[c.prefix] = c.btnId; });
-  Object.keys(snapshot.deviceRowCounts || {}).forEach(prefix => {
-    const wantCount = snapshot.deviceRowCounts[prefix] || 0;
-    const tbody = document.getElementById(`${prefix}__tbody`);
-    const addBtn = document.getElementById(addButtonIds[prefix]);
-    if (!tbody || !addBtn) return;
-    while (tbody.children.length < wantCount) addBtn.click();
-  });
-  Object.keys(snapshot.fields || {}).forEach(id => {
-    const elm = document.getElementById(id);
-    if (!elm) return;
-    if (elm.type === 'checkbox') elm.checked = !!snapshot.fields[id];
-    else elm.value = snapshot.fields[id];
-  });
-  // Setting deliveryDate.value directly above (generic restore loop) doesn't
-  // update flatpickr's own internal state or its visible alt-input text -
-  // sync those explicitly now that the shop (and its allowed weekdays) has
-  // already been restored via storeSelect.value earlier in bootstrapEditMode.
-  if (deliveryFP && snapshot.fields && snapshot.fields.deliveryDate) {
-    deliveryFP.set('disable', [buildDeliveryDateDisableFn(storeSelect.value)]);
-    deliveryFP.setDate(snapshot.fields.deliveryDate, false);
-  }
-  Object.keys(snapshot.radioGroups || {}).forEach(name => {
-    const val = snapshot.radioGroups[name];
-    document.querySelectorAll(`input[type="radio"][name="${name}"]`).forEach(r => {
-      r.checked = (r.value === val);
-    });
-  });
-
-  // The OS select's options depend on the chosen model (see
-  // updateOsOptionsForRow), and setting .value above doesn't fire a
-  // 'change' event, so re-narrow each laptop/desktop row's OS options now
-  // and re-apply the saved OS value (narrowing rebuilds the <select>).
-  ['laptop', 'desktop'].forEach(prefix => {
-    const tbody = document.getElementById(`${prefix}__tbody`);
-    if (!tbody) return;
-    Array.from(tbody.children).forEach(tr => {
-      const idx = tr.getAttribute('data-idx');
-      updateOsOptionsForRow(prefix, idx);
-      const osId = `${prefix}__os__${idx}`;
-      if (snapshot.fields && snapshot.fields[osId] !== undefined) {
-        const osSel = document.getElementById(osId);
-        if (osSel) osSel.value = snapshot.fields[osId];
-      }
-    });
-  });
-
-  // Auto-expand any collapsed Économat category that got a restored
-  // non-zero quantity, so the user doesn't have to hunt for it manually.
-  document.querySelectorAll('.group-title.collapsible').forEach(titleEl => {
-    const table = titleEl.nextElementSibling;
-    if (!table || table.style.display !== 'none') return;
-    const hasValue = Array.from(table.querySelectorAll('input[type="number"]'))
-      .some(inp => parseFloat(inp.value) > 0);
-    if (hasValue) titleEl.click();
-  });
-}
-
-async function logOrderToSupabase(editPasscode) {
+async function logOrderToSupabase() {
   const store = storeSelect.value;
   const dateVal = document.getElementById('deliveryDate').value;
   const radioVal = (name) => {
     const r = document.querySelector(`input[name="${name}"]:checked`);
     return r ? r.value : null;
   };
-
-  const editOrderId = window.__editOrderId || null;
 
   const orderPayload = {
     store_name: store,
@@ -1857,26 +1780,6 @@ async function logOrderToSupabase(editPasscode) {
   };
 
   const lines = collectAllLineItems();
-
-  if (editOrderId) {
-    // Edits go through the Worker's /api/edit-order route, which requires
-    // the same login cookie as the rest of the app AND checks the edit
-    // passcode server-side (it never reaches the browser); if correct, it
-    // writes using a Supabase service_role key that only the Worker holds.
-    // Throwing 'WRONG_PASSCODE' lets the caller show the right toast.
-    const resp = await fetch('/api/edit-order', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ orderId: editOrderId, passcode: editPasscode, order: orderPayload, lines })
-    });
-    let result = {};
-    try { result = await resp.json(); } catch (e) { /* ignore unparsable body */ }
-    if (!resp.ok) {
-      if (resp.status === 401) throw new Error('WRONG_PASSCODE');
-      throw new Error(result.error || ('edit-order failed: ' + resp.status));
-    }
-    return;
-  }
 
   // New order submission also goes through the Worker (/api/orders), not
   // directly to Supabase - the browser no longer holds any Supabase key at
@@ -2018,7 +1921,7 @@ function showRegisterRetryBanner(pending) {
 // slept, connection died for good), offer to finish it now.
 window.addEventListener('load', () => {
   const p = loadPendingRegistration();
-  if (p && !window.__editOrderId) showRegisterRetryBanner(p);
+  if (p) showRegisterRetryBanner(p);
 });
 
 // FormSubmit's /ajax/ endpoint does not deliver file attachments (documented
@@ -2129,77 +2032,9 @@ document.getElementById('btnSend').addEventListener('click', async () => {
     return;
   }
 
-  const isEditMode = !!window.__editOrderId;
-  let editPasscode = null;
-
-  if (isEditMode) {
-    const entered = window.prompt(bi('Code de modification requis :', 'Wijzigingscode vereist:', 'Code de modification requis / Wijzigingscode vereist:'));
-    if (entered === null) return; // cancelled
-    editPasscode = entered;
-  }
-
   const sendBtn = document.getElementById('btnSend');
   sendBtn.disabled = true;
-  toast(isEditMode ? bi('Enregistrement en cours...', 'Bezig met opslaan...') : bi('Envoi en cours...', 'Bezig met verzenden...'));
-
-  if (isEditMode) {
-    // Editing an existing order updates the tracked record via the Worker
-    // (passcode checked server-side there). As of September 2026 the Worker
-    // also refuses the edit outright once the order has already been
-    // prepared or verified (see apiEditOrder) - editing replaces every line
-    // wholesale, which would otherwise silently wipe out whatever picking
-    // data the warehouse had already recorded.
-    try {
-      await logOrderToSupabase(editPasscode);
-    } catch (e) {
-      console.error(e);
-      if (e.message === 'WRONG_PASSCODE') {
-        toast(bi('Code incorrect. Modifications non enregistrées.', 'Onjuiste code. Wijzigingen niet opgeslagen.'));
-      } else if (e.message === 'already_prepared') {
-        toast(bi(
-          "Cette commande a déjà été préparée (ou vérifiée) et ne peut plus être modifiée. Contactez la logistique si un changement est indispensable.",
-          'Deze bestelling is al voorbereid (of gecontroleerd) en kan niet meer gewijzigd worden. Neem contact op met de logistiek als een wijziging noodzakelijk is.'
-        ));
-      } else {
-        toast(bi("Échec de l'enregistrement des modifications. Réessayez plus tard.", 'Opslaan van de wijzigingen is mislukt. Probeer het later opnieuw.'));
-      }
-      sendBtn.disabled = false;
-      return;
-    }
-
-    // The tracked record update succeeded - now (best-effort) notify the
-    // logistics team and, if relevant, the IT workshop that the order
-    // changed, so they aren't left working from a stale Excel file. Added
-    // September 2026: edits used to update only the database, silently.
-    // The shop's own copy is deliberately NOT resent here, to avoid
-    // spamming the shop's mailbox on every edit.
-    const editEmailJobs = [
-      { key: 'email', promise: sendEmailWithAttachment(store, dateVal, { subject: `Commande modifiée - ${store} - ${dateVal}` }) }
-    ];
-    if (hasInformatiqueLines()) {
-      editEmailJobs.push({
-        key: 'infoEmail',
-        promise: sendEmailWithAttachment(store, dateVal, {
-          target: INFO_EMAIL_TARGET,
-          buildWorkbook: buildInformatiqueWorkbook,
-          filename: getInformatiqueExportFilename(),
-          subject: `Commande Informatique modifiée - ${store} - ${dateVal}`
-        })
-      });
-    }
-    const editEmailSettled = await Promise.allSettled(editEmailJobs.map(j => j.promise));
-    editEmailSettled.forEach((r, i) => { if (r.status === 'rejected') console.error(editEmailJobs[i].key, r.reason); });
-
-    // Success: leave the form and land on the tracking dashboard with a
-    // persistent confirmation banner, rather than a toast that disappears
-    // after a few seconds while the (still-filled-in) form stays on screen
-    // looking unchanged - that ambiguity is what prompted this redirect.
-    // The database update is the source of truth and already succeeded
-    // above, so this redirect happens regardless of the email outcome
-    // (same best-effort treatment as the initial submission).
-    window.location.href = 'dashboard.html?updated=1';
-    return;
-  }
+  toast(bi('Envoi en cours...', 'Bezig met verzenden...'));
 
   // If this order has informatique quantities, also send a second email
   // with only those items to INFO_EMAIL_TARGET, alongside (not instead of)
@@ -2303,77 +2138,6 @@ document.getElementById('btnSend').addEventListener('click', async () => {
   sendBtn.disabled = false;
 });
 
-// --- Edit mode: reload an existing order from Supabase for editing ---
-//
-// bootstrapEditMode() fills the form asynchronously (it fetches the order,
-// then waits on live Odoo stock lookups for every Informatique category
-// before applying the saved snapshot - see applyFormSnapshot()). Until that
-// finishes, fields like deliveryDate are still empty even though the page
-// already looks fully loaded and clickable. Clicking "Envoyer" or
-// "Télécharger une copie" during that window used to read an empty date and
-// show a misleading "date must be a workday" error. To prevent that, the
-// action buttons are disabled for the whole loading window below and only
-// re-enabled once the form has actually been populated (or loading failed).
-async function bootstrapEditMode() {
-  const params = new URLSearchParams(window.location.search);
-  const editId = params.get('edit');
-  if (!editId) return;
-
-  const sendBtn = document.getElementById('btnSend');
-  const exportBtn = document.getElementById('btnExport');
-  const resetBtn = document.getElementById('btnReset');
-  const loadingBtns = [sendBtn, exportBtn, resetBtn].filter(Boolean);
-  loadingBtns.forEach(b => { b.disabled = true; });
-  const originalSendLabel = sendBtn ? sendBtn.textContent : '';
-  if (sendBtn) sendBtn.textContent = bi('Chargement de la commande...', 'Bestelling wordt geladen...');
-  toast(bi('Chargement de la commande à modifier...', 'De te wijzigen bestelling wordt geladen...'));
-
-  try {
-    // Edit-mode prefill now goes through the Worker's /api/orders/:id route
-    // (requires the app's login cookie) instead of a direct, unauthenticated
-    // Supabase call - previously anyone who knew (or guessed) an order id
-    // could read that order's full contents with just the public anon key.
-    const resp = await fetch(`/api/orders/${encodeURIComponent(editId)}`);
-    if (resp.status === 404) {
-      toast(bi('Commande introuvable pour la modification.', 'Bestelling niet gevonden om te wijzigen.'));
-      if (sendBtn) sendBtn.textContent = originalSendLabel;
-      return;
-    }
-    if (!resp.ok) throw new Error('fetch order failed: ' + resp.status);
-    const order = await resp.json();
-    if (!order.form_snapshot) {
-      toast(bi("Cette commande a été enregistrée avant l'ajout de la fonction de modification et ne peut pas être rechargée automatiquement.", 'Deze bestelling werd geregistreerd vóór de wijzigingsfunctie en kan niet automatisch worden herladen.'));
-      if (sendBtn) sendBtn.textContent = originalSendLabel;
-      return;
-    }
-
-    window.__editOrderId = order.id;
-
-    storeSelect.value = order.store_name;
-    renderSections();
-    updateDeliveryDateHint();
-    await applyFormSnapshot(order.form_snapshot);
-    updateBacsITReasonVisibility();
-
-    if (sendBtn) sendBtn.textContent = bi('Enregistrer les modifications', 'Wijzigingen opslaan');
-
-    const banner = document.getElementById('editBanner');
-    banner.style.display = 'block';
-    banner.textContent = bi(
-      `Modification de la commande n°${order.id} (${order.store_name}, livraison le ${order.delivery_date || '?'}). Les modifications remplaceront la commande existante.`,
-      `Wijziging van bestelling nr. ${order.id} (${order.store_name}, levering op ${order.delivery_date || '?'}). De wijzigingen vervangen de bestaande bestelling.`
-    );
-
-    window.scrollTo(0, 0);
-  } catch (e) {
-    console.error(e);
-    toast(bi('Impossible de charger la commande à modifier.', 'De te wijzigen bestelling kon niet worden geladen.'));
-    if (sendBtn) sendBtn.textContent = originalSendLabel;
-  } finally {
-    loadingBtns.forEach(b => { b.disabled = false; });
-  }
-}
-bootstrapEditMode();
 </script>
 
 </body>
