@@ -184,7 +184,7 @@
     <img src="./logo-oxfam.png" alt="Oxfam" style="height:56px; width:auto; background:white; border-radius:8px; padding:4px;">
     <div>
       <h1 id="mainTitle">Bon de commande - Bestelbon</h1>
-      <p id="mainSubtitle">A envoyer au moins 4 jours ouvrables avant la date de livraison souhaitée (2 pour Shop Vintage). / Op te sturen ten minste 4 werkdagen v&oacute;&oacute;r de gewenste leverdatum (2 voor Shop Vintage).</p>
+      <p id="mainSubtitle">A envoyer au moins 3 jours ouvrables avant la date de livraison souhaitée (2 pour Shop Vintage). / Op te sturen ten minste 3 werkdagen v&oacute;&oacute;r de gewenste leverdatum (2 voor Shop Vintage).</p>
       <p><a href="./dashboard.html" id="dashboardLink" style="color:white;">Voir le suivi de toutes les commandes / Bekijk de opvolging van alle bestellingen &rarr;</a></p>
     </div>
   </div>
@@ -368,8 +368,8 @@ function setText(id, text) {
 function applyStaticLangText() {
   setText('mainTitle', bi('Bon de commande', 'Bestelbon', 'Bon de commande - Bestelbon'));
   setText('mainSubtitle', bi(
-    'A envoyer au moins 4 jours ouvrables avant la date de livraison souhaitée (2 pour Shop Vintage).',
-    'Op te sturen ten minste 4 werkdagen vóór de gewenste leverdatum (2 voor Shop Vintage).'
+    'A envoyer au moins 3 jours ouvrables avant la date de livraison souhaitée (2 pour Shop Vintage).',
+    'Op te sturen ten minste 3 werkdagen vóór de gewenste leverdatum (2 voor Shop Vintage).'
   ));
   setText('dashboardLink', bi('Voir le suivi de toutes les commandes →', 'Bekijk de opvolging van alle bestellingen →', 'Voir le suivi de toutes les commandes / Bekijk de opvolging van alle bestellingen →'));
   setText('card1Title', bi('1. Magasin & livraison', '1. Winkel & levering', '1. Magasin & livraison / Winkel & levering'));
@@ -482,7 +482,7 @@ function formatAllowedDays(days) {
 
 // Delivery date must be at least MIN_DELIVERY_DAYS working days (Mon-Fri)
 // from today - 3 for most shops, overridden per store below.
-const DEFAULT_MIN_DELIVERY_DAYS = 4; // was 3 until 2026-10-15: preparation needs 3 full working days BEFORE the delivery day
+const DEFAULT_MIN_DELIVERY_DAYS = 3;
 // Added 2026-09-28 per Manu: Shop Vintage can request delivery on shorter
 // notice (2 working days) than the usual 3.
 const MIN_DELIVERY_DAYS_OVERRIDE = {
@@ -491,22 +491,55 @@ const MIN_DELIVERY_DAYS_OVERRIDE = {
 function minDeliveryDaysFor(store) {
   return (store && MIN_DELIVERY_DAYS_OVERRIDE[store]) || DEFAULT_MIN_DELIVERY_DAYS;
 }
+function formatDateISO(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+// Belgian public holidays (federal, 10 per year), computed from the year so
+// nothing needs updating each January: 1 Jan, Easter Monday, 1 May,
+// Ascension (Easter+39), Whit Monday (Easter+50), 21 Jul, 15 Aug, 1 Nov,
+// 11 Nov, 25 Dec. Added 2026-10 per Manu. Regional/community holidays
+// (11 Jul, 27 Sep...) are deliberately not included. A holiday is never
+// counted as a working day and is never a valid delivery date.
+function easterSunday(year) {
+  const a = year % 19, b = Math.floor(year / 100), c = year % 100;
+  const d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4), k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const month = Math.floor((h + l - 7 * m + 114) / 31);
+  const day = ((h + l - 7 * m + 114) % 31) + 1;
+  return new Date(year, month - 1, day);
+}
+const belgianHolidayCache = {};
+function belgianHolidaysFor(year) {
+  if (belgianHolidayCache[year]) return belgianHolidayCache[year];
+  const easter = easterSunday(year);
+  const plus = (n) => formatDateISO(new Date(year, easter.getMonth(), easter.getDate() + n));
+  const fixed = [[1, 1], [5, 1], [7, 21], [8, 15], [11, 1], [11, 11], [12, 25]]
+    .map(([m, d]) => formatDateISO(new Date(year, m - 1, d)));
+  return (belgianHolidayCache[year] = new Set(fixed.concat([plus(1), plus(39), plus(50)])));
+}
+function isBelgianHoliday(d) {
+  return belgianHolidaysFor(d.getFullYear()).has(formatDateISO(d));
+}
+function isWorkingDay(d) {
+  const day = d.getDay();
+  return day !== 0 && day !== 6 && !isBelgianHoliday(d);
+}
 function computeMinDeliveryDate(days) {
   const d = new Date();
   d.setHours(0, 0, 0, 0);
   let added = 0;
   while (added < (days || DEFAULT_MIN_DELIVERY_DAYS)) {
     d.setDate(d.getDate() + 1);
-    const day = d.getDay(); // 0 = Sunday, 6 = Saturday
-    if (day !== 0 && day !== 6) added++;
+    if (isWorkingDay(d)) added++;
   }
   return d;
-}
-function formatDateISO(d) {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
 }
 function formatDateHuman(d) {
   return d.toLocaleDateString('fr-BE', { day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -524,8 +557,8 @@ function minDeliveryDateIsoFor(store) {
 function isWeekend(dateStr) {
   // dateStr is an ISO "YYYY-MM-DD" string from the date input.
   const d = new Date(dateStr + 'T00:00:00');
-  const day = d.getDay(); // 0 = Sunday, 6 = Saturday
-  return day === 0 || day === 6;
+  const d2 = d;
+  return !isWorkingDay(d2); // weekend OR Belgian public holiday
 }
 function isAllowedDeliveryWeekday(dateStr, store) {
   const days = getAllowedWeekdays(store);
@@ -543,14 +576,14 @@ function deliveryDateErrorMessage(store) {
   const minDate = minDeliveryDateFor(store);
   if (days) {
     const { fr, nl } = formatAllowedDays(days);
-    const frText = `La date de livraison doit correspondre au jour de tournée de votre magasin (${fr}), et être au moins ${minDays} jours ouvrables après aujourd'hui (à partir du ${formatDateHuman(minDate)}).`;
+    const frText = `La date de livraison doit correspondre au jour de tournée de votre magasin (${fr}), et être au moins ${minDays} jours ouvrables (hors jours fériés) après aujourd'hui (à partir du ${formatDateHuman(minDate)}).`;
     const nlText = `De leveringsdatum moet overeenkomen met de rondedag van uw winkel (${nl}), en minstens ${minDays} werkdagen na vandaag zijn (vanaf ${formatDateHuman(minDate)}).`;
     if (lang === 'fr') return frText;
     if (lang === 'nl') return nlText;
     return `${frText} / ${nlText}`;
   }
-  const frText2 = `La date de livraison doit être un jour ouvrable (lundi-vendredi), au moins ${minDays} jours ouvrables après aujourd'hui (à partir du ${formatDateHuman(minDate)}).`;
-  const nlText2 = `De leveringsdatum moet een werkdag zijn (maandag-vrijdag), minstens ${minDays} werkdagen na vandaag (vanaf ${formatDateHuman(minDate)}).`;
+  const frText2 = `La date de livraison doit être un jour ouvrable (lundi-vendredi), au moins ${minDays} jours ouvrables (hors jours fériés) après aujourd'hui (à partir du ${formatDateHuman(minDate)}).`;
+  const nlText2 = `De leveringsdatum moet een werkdag zijn (maandag-vrijdag), minstens ${minDays} werkdagen (feestdagen niet meegeteld) na vandaag (vanaf ${formatDateHuman(minDate)}).`;
   if (lang === 'fr') return frText2;
   if (lang === 'nl') return nlText2;
   return `${frText2} / ${nlText2}`;
@@ -567,13 +600,13 @@ function updateDeliveryDateHint() {
   if (days) {
     const { fr, nl } = formatAllowedDays(days);
     deliveryDateHint.textContent = bi(
-      `Votre magasin est livré le : ${fr} (à partir du ${humanDate} au plus tôt). Les autres jours sont grisés dans le calendrier.`,
-      `Uw winkel wordt beleverd op: ${nl} (ten vroegste vanaf ${humanDate}). De andere dagen zijn grijs in de kalender.`
+      `Votre magasin est livré le : ${fr} (à partir du ${humanDate} au plus tôt). Les autres jours (et les jours fériés) sont grisés dans le calendrier.`,
+      `Uw winkel wordt beleverd op: ${nl} (ten vroegste vanaf ${humanDate}). De andere dagen (en feestdagen) zijn grijs in de kalender.`
     );
   } else {
     deliveryDateHint.textContent = bi(
-      `Date la plus proche possible : ${humanDate} (minimum ${minDays} jours ouvrables, week-ends exclus). Choisissez d'abord votre magasin pour voir ses jours de livraison.`,
-      `Vroegst mogelijke datum: ${humanDate} (minimum ${minDays} werkdagen, weekends uitgesloten). Kies eerst uw winkel om de leverdagen te zien.`
+      `Date la plus proche possible : ${humanDate} (minimum ${minDays} jours ouvrables, week-ends et jours fériés exclus). Choisissez d'abord votre magasin pour voir ses jours de livraison.`,
+      `Vroegst mogelijke datum: ${humanDate} (minimum ${minDays} werkdagen, weekends en feestdagen uitgesloten). Kies eerst uw winkel om de leverdagen te zien.`
     );
   }
 }
@@ -584,7 +617,7 @@ function buildDeliveryDateDisableFn(store) {
   const days = store ? getAllowedWeekdays(store) : null;
   return function (date) {
     const wd = date.getDay();
-    if (wd === 0 || wd === 6) return true;
+    if (wd === 0 || wd === 6 || isBelgianHoliday(date)) return true;
     if (days && !days.includes(wd)) return true;
     return false;
   };
