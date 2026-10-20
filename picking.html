@@ -175,7 +175,15 @@
       <div class="push-grid">
         <div class="field full"><label for="pushCategory">Section / Sectie</label><select id="pushCategory" class="push-select"></select></div>
         <div class="field full"><label for="pushArticle">Article / Artikel</label><input type="text" id="pushArticle" list="pushArticleList" placeholder="Choisir dans la liste ou écrire / Kies uit de lijst of schrijf"><datalist id="pushArticleList"></datalist></div>
-        <div class="field"><label for="pushQty">Quantité / Aantal</label><input type="number" id="pushQty" class="push-qty" min="1" step="1"></div>
+        <div class="field" id="pushQtyField"><label for="pushQty">Quantité / Aantal</label><input type="number" id="pushQty" class="push-qty" min="1" step="1"></div>
+        <div class="field full" id="pushColorField" style="display:none;">
+          <label>Quantité par couleur / Aantal per kleur <span style="font-weight:400;color:#666;">(au moins une / minstens één)</span></label>
+          <div style="display:flex; gap:10px;">
+            <div style="flex:1;"><label for="pushRed" style="font-weight:500;">Rouge / Rood</label><input type="number" id="pushRed" class="push-qty" min="0" step="1"></div>
+            <div style="flex:1;"><label for="pushYellow" style="font-weight:500;">Jaune / Geel</label><input type="number" id="pushYellow" class="push-qty" min="0" step="1"></div>
+            <div style="flex:1;"><label for="pushGreen" style="font-weight:500;">Vert / Groen</label><input type="number" id="pushGreen" class="push-qty" min="0" step="1"></div>
+          </div>
+        </div>
         <div class="field"><label for="pushReason">Motif (optionnel) / Reden (optioneel)</label><input type="text" id="pushReason" maxlength="300" placeholder="ex. saison, surstock / bv. seizoen, overstock"></div>
         <div class="field full"><label for="pushBy">Ajouté par / Toegevoegd door</label><input type="text" id="pushBy" placeholder="Votre nom / Uw naam"></div>
       </div>
@@ -670,49 +678,91 @@ function fillPushArticles() {
   dl.innerHTML = '';
   ((cat && cat.items) || []).forEach(it => dl.appendChild(el('option', { value: it[0] })));
 }
-document.getElementById('pushCategory').addEventListener('change', fillPushArticles);
+// Crème/Midmix clothing & coats are ordered with a Rouge/Jaune/Vert split
+// (see index.html) - the push form asks for it too when that kind of
+// article is picked, and creates one push line per colour, labelled the
+// same way as the shop's own lines ("... [Rouge/Rood]").
+const PUSH_COLORS = [
+  { id: 'pushRed', label: 'Rouge/Rood' },
+  { id: 'pushYellow', label: 'Jaune/Geel' },
+  { id: 'pushGreen', label: 'Vert/Groen' },
+];
+function currentPushItem() {
+  const cat = (window.PUSH_CATALOGUE || [])[Number(document.getElementById('pushCategory').value)];
+  const name = document.getElementById('pushArticle').value.trim();
+  return { cat, name, known: cat ? cat.items.find(it => it[0] === name) : null };
+}
+function updatePushColorMode() {
+  const { known } = currentPushItem();
+  const color = !!(known && known[2]);
+  document.getElementById('pushColorField').style.display = color ? '' : 'none';
+  document.getElementById('pushQtyField').style.display = color ? 'none' : '';
+}
+document.getElementById('pushCategory').addEventListener('change', () => { fillPushArticles(); updatePushColorMode(); });
+document.getElementById('pushArticle').addEventListener('input', updatePushColorMode);
+document.getElementById('pushArticle').addEventListener('change', updatePushColorMode);
 
 document.getElementById('pushBtn').addEventListener('click', async () => {
   const btn = document.getElementById('pushBtn');
-  const cat = (window.PUSH_CATALOGUE || [])[Number(document.getElementById('pushCategory').value)];
-  const articleFr = document.getElementById('pushArticle').value.trim();
-  const qty = parseFloat(document.getElementById('pushQty').value);
+  const { cat, name: articleFr, known } = currentPushItem();
   const by = document.getElementById('pushBy').value.trim();
   const reason = document.getElementById('pushReason').value.trim();
   if (!cat) { toast('Choisissez une section. / Kies een sectie.'); return; }
   if (!articleFr) { toast('Indiquez l\'article. / Geef het artikel op.'); return; }
-  if (!(qty > 0)) { toast('Indiquez une quantité supérieure à 0. / Geef een aantal groter dan 0 op.'); return; }
-  if (!by) { toast('Indiquez votre nom. / Geef uw naam op.'); return; }
-  const known = cat.items.find(it => it[0] === articleFr);
-  btn.disabled = true;
-  try {
-    const resp = await fetch('/api/add-push-line', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ orderId, addedBy: by, category: cat.category, article_fr: articleFr, article_nl: known ? known[1] : null, quantity: qty, reason: reason || null })
-    });
-    const result = await resp.json();
-    if (resp.status === 409) { toast('Commande déjà vérifiée : plus de modification possible. / Bestelling al geverifieerd: niet meer te wijzigen.'); return; }
-    if (!resp.ok) throw new Error(result.error || ('add-push-line failed: ' + resp.status));
 
-    // Re-render, keeping whatever the preparers have typed but not yet saved.
-    const typed = {};
-    document.querySelectorAll('tr[data-line-id] input[type=number]').forEach(i => { if (!i.disabled) typed[i.closest('tr').getAttribute('data-line-id')] = i.value; });
-    currentLines.push(result.line);
-    renderLines(currentLines);
-    document.querySelectorAll('tr[data-line-id] input[type=number]').forEach(i => {
-      const id = i.closest('tr').getAttribute('data-line-id');
-      if (!i.disabled && typed[id] !== undefined) i.value = typed[id];
+  // One entry per line to create: a single one, or one per colour.
+  const entries = [];
+  if (known && known[2]) {
+    PUSH_COLORS.forEach(c => {
+      const q = parseFloat(document.getElementById(c.id).value);
+      if (q > 0) entries.push({ article_fr: `${articleFr} [${c.label}]`, quantity: q });
     });
-    renderProgressBanner();
-    document.getElementById('pushArticle').value = '';
-    document.getElementById('pushQty').value = '';
-    document.getElementById('pushReason').value = '';
-    toast('Article ajouté. / Artikel toegevoegd.');
+    if (!entries.length) { toast('Indiquez au moins une quantité par couleur. / Geef minstens één aantal per kleur op.'); return; }
+  } else {
+    const q = parseFloat(document.getElementById('pushQty').value);
+    if (!(q > 0)) { toast('Indiquez une quantité supérieure à 0. / Geef een aantal groter dan 0 op.'); return; }
+    entries.push({ article_fr: articleFr, quantity: q });
+  }
+  if (!by) { toast('Indiquez votre nom. / Geef uw naam op.'); return; }
+
+  btn.disabled = true;
+  let added = 0;
+  try {
+    for (const entry of entries) {
+      const resp = await fetch('/api/add-push-line', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId, addedBy: by, category: cat.category, article_fr: entry.article_fr, article_nl: known ? known[1] : null, quantity: entry.quantity, reason: reason || null })
+      });
+      const result = await resp.json();
+      if (resp.status === 409) { toast('Commande déjà vérifiée : plus de modification possible. / Bestelling al geverifieerd: niet meer te wijzigen.'); break; }
+      if (!resp.ok) throw new Error(result.error || ('add-push-line failed: ' + resp.status));
+      currentLines.push(result.line);
+      added++;
+    }
+    if (added === entries.length) {
+      document.getElementById('pushArticle').value = '';
+      document.getElementById('pushQty').value = '';
+      PUSH_COLORS.forEach(c => { document.getElementById(c.id).value = ''; });
+      document.getElementById('pushReason').value = '';
+      updatePushColorMode();
+      toast('Article ajouté. / Artikel toegevoegd.');
+    }
   } catch (e) {
     console.error(e);
-    toast("Échec de l'ajout. Réessayez. / Toevoegen mislukt. Probeer opnieuw.");
+    toast("Échec de l'ajout (vérifiez les lignes ajoutées). / Toevoegen mislukt (controleer de toegevoegde regels).");
   } finally {
+    if (added) {
+      // Re-render, keeping whatever the preparers have typed but not yet saved.
+      const typed = {};
+      document.querySelectorAll('tr[data-line-id] input[type=number]').forEach(i => { if (!i.disabled) typed[i.closest('tr').getAttribute('data-line-id')] = i.value; });
+      renderLines(currentLines);
+      document.querySelectorAll('tr[data-line-id] input[type=number]').forEach(i => {
+        const id = i.closest('tr').getAttribute('data-line-id');
+        if (!i.disabled && typed[id] !== undefined) i.value = typed[id];
+      });
+      renderProgressBanner();
+    }
     btn.disabled = false;
   }
 });
