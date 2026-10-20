@@ -125,6 +125,14 @@
   .legend { font-size: 12px; color: #666; margin: -4px 0 14px; }
   .legend .dot { display: inline-block; width: 10px; height: 10px; border-radius: 2px; background: var(--diff-bg); border: 1px solid var(--diff-border); vertical-align: middle; margin-right: 4px; }
   table.items td.article-logistics { font-weight: 500; }
+  .push-badge { display: inline-block; background: #e3eefb; color: #1b4f8f; border: 1px solid #b5cdee; border-radius: 4px; font-size: 10px; font-weight: 700; padding: 1px 6px; margin-left: 6px; text-transform: uppercase; letter-spacing: 0.4px; vertical-align: middle; }
+  tr.push-row { background: #f3f8fe; }
+  details.push-card summary { cursor: pointer; font-weight: 700; color: var(--oxfam-dark); font-size: 14px; }
+  details.push-card .push-hint { font-size: 12px; color: #555; margin: 10px 0 12px; }
+  .push-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .push-grid .full { grid-column: 1 / -1; }
+  @media (max-width: 600px) { .push-grid { grid-template-columns: 1fr; } }
+  select.push-select, input[type=number].push-qty { width: 100%; padding: 8px 10px; border: 1px solid #c7cfca; border-radius: 6px; font-size: 14px; font-family: inherit; background: white; }
 </style>
 </head>
 <body>
@@ -161,6 +169,19 @@
 
     <div id="lineSections"></div>
 
+    <details class="card push-card" id="pushCard">
+      <summary>+ Ajouter un article non commandé (push) / + Niet-besteld artikel toevoegen (push)</summary>
+      <p class="push-hint">Pour un article que le centre ajoute de sa propre initiative (stock, saison). Le magasin en sera informé dans le même email que les écarts. / Voor een artikel dat het centrum op eigen initiatief toevoegt (voorraad, seizoen). De winkel wordt hiervan op de hoogte gebracht in dezelfde e-mail als de afwijkingen.</p>
+      <div class="push-grid">
+        <div class="field full"><label for="pushCategory">Section / Sectie</label><select id="pushCategory" class="push-select"></select></div>
+        <div class="field full"><label for="pushArticle">Article / Artikel</label><input type="text" id="pushArticle" list="pushArticleList" placeholder="Choisir dans la liste ou écrire / Kies uit de lijst of schrijf"><datalist id="pushArticleList"></datalist></div>
+        <div class="field"><label for="pushQty">Quantité / Aantal</label><input type="number" id="pushQty" class="push-qty" min="1" step="1"></div>
+        <div class="field"><label for="pushReason">Motif (optionnel) / Reden (optioneel)</label><input type="text" id="pushReason" maxlength="300" placeholder="ex. saison, surstock / bv. seizoen, overstock"></div>
+        <div class="field full"><label for="pushBy">Ajouté par / Toegevoegd door</label><input type="text" id="pushBy" placeholder="Votre nom / Uw naam"></div>
+      </div>
+      <div class="section-footer"><button type="button" class="btn btn-primary" id="pushBtn">Ajouter / Toevoegen</button></div>
+    </details>
+
   </div>
 
   <div id="noOrderMsg" class="card" style="display:none;">
@@ -171,6 +192,7 @@
 
 <div id="toast"></div>
 
+<script src="./catalogue.js"></script>
 <script>
 // This page used to read a single order + its lines directly from Supabase
 // with the public anon key, and no check beyond having a valid-looking
@@ -252,6 +274,7 @@ async function loadOrder() {
     renderLogisticsSection(order);
     renderLines(currentLines);
     renderProgressBanner();
+    renderPushCard();
 
     document.getElementById('loadingMsg').style.display = 'none';
     document.getElementById('content').style.display = 'block';
@@ -587,15 +610,20 @@ function renderLines(lines) {
       tdArt.appendChild(el('div', { class: 'article-fr', text: line.article_fr || '' }));
       if (line.article_nl) tdArt.appendChild(el('div', { class: 'article-nl', text: line.article_nl }));
       tr.appendChild(tdArt);
-      tr.appendChild(el('td', { class: 'num', text: String(line.quantity) }));
+      const isPush = line.source === 'push';
+      if (isPush) {
+        tr.classList.add('push-row');
+        tdArt.querySelector('.article-fr').appendChild(el('span', { class: 'push-badge', text: 'Push', title: line.push_reason || '' }));
+      }
+      tr.appendChild(el('td', { class: 'num', text: isPush ? '\u2014' : String(line.quantity) }));
       const tdPicked = el('td', { class: 'num' });
       const initial = (line.quantity_picked !== null && line.quantity_picked !== undefined) ? line.quantity_picked : line.quantity;
       const input = el('input', { type: 'number', min: '0', value: String(initial) });
       if (isDone) input.disabled = true;
-      input.addEventListener('input', () => updateDiffHighlight(tr, input, line.quantity));
+      if (!isPush) input.addEventListener('input', () => updateDiffHighlight(tr, input, line.quantity));
       tdPicked.appendChild(input);
       tr.appendChild(tdPicked);
-      updateDiffHighlight(tr, input, line.quantity);
+      if (!isPush) updateDiffHighlight(tr, input, line.quantity);
       tbody.appendChild(tr);
     });
     table.appendChild(tbody);
@@ -622,6 +650,72 @@ function renderLines(lines) {
     container.appendChild(card);
   });
 }
+
+// ---- Push lines (items the centre adds on its own initiative) ----------
+function renderPushCard() {
+  const card = document.getElementById('pushCard');
+  if (currentOrder && currentOrder.verified_at) { card.style.display = 'none'; return; }
+  const sel = document.getElementById('pushCategory');
+  if (sel.options.length) return;
+  (window.PUSH_CATALOGUE || []).forEach((c, i) => sel.appendChild(el('option', { value: String(i), text: c.category })));
+  // Sections already on this order first - the usual case is adding to one of them.
+  const present = Array.from(new Set(currentLines.map(l => l.category)));
+  const idx = (window.PUSH_CATALOGUE || []).findIndex(c => present.includes(c.category));
+  if (idx > 0) sel.value = String(idx);
+  fillPushArticles();
+}
+function fillPushArticles() {
+  const cat = (window.PUSH_CATALOGUE || [])[Number(document.getElementById('pushCategory').value)];
+  const dl = document.getElementById('pushArticleList');
+  dl.innerHTML = '';
+  ((cat && cat.items) || []).forEach(it => dl.appendChild(el('option', { value: it[0] })));
+}
+document.getElementById('pushCategory').addEventListener('change', fillPushArticles);
+
+document.getElementById('pushBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('pushBtn');
+  const cat = (window.PUSH_CATALOGUE || [])[Number(document.getElementById('pushCategory').value)];
+  const articleFr = document.getElementById('pushArticle').value.trim();
+  const qty = parseFloat(document.getElementById('pushQty').value);
+  const by = document.getElementById('pushBy').value.trim();
+  const reason = document.getElementById('pushReason').value.trim();
+  if (!cat) { toast('Choisissez une section. / Kies een sectie.'); return; }
+  if (!articleFr) { toast('Indiquez l\'article. / Geef het artikel op.'); return; }
+  if (!(qty > 0)) { toast('Indiquez une quantité supérieure à 0. / Geef een aantal groter dan 0 op.'); return; }
+  if (!by) { toast('Indiquez votre nom. / Geef uw naam op.'); return; }
+  const known = cat.items.find(it => it[0] === articleFr);
+  btn.disabled = true;
+  try {
+    const resp = await fetch('/api/add-push-line', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ orderId, addedBy: by, category: cat.category, article_fr: articleFr, article_nl: known ? known[1] : null, quantity: qty, reason: reason || null })
+    });
+    const result = await resp.json();
+    if (resp.status === 409) { toast('Commande déjà vérifiée : plus de modification possible. / Bestelling al geverifieerd: niet meer te wijzigen.'); return; }
+    if (!resp.ok) throw new Error(result.error || ('add-push-line failed: ' + resp.status));
+
+    // Re-render, keeping whatever the preparers have typed but not yet saved.
+    const typed = {};
+    document.querySelectorAll('tr[data-line-id] input[type=number]').forEach(i => { if (!i.disabled) typed[i.closest('tr').getAttribute('data-line-id')] = i.value; });
+    currentLines.push(result.line);
+    renderLines(currentLines);
+    document.querySelectorAll('tr[data-line-id] input[type=number]').forEach(i => {
+      const id = i.closest('tr').getAttribute('data-line-id');
+      if (!i.disabled && typed[id] !== undefined) i.value = typed[id];
+    });
+    renderProgressBanner();
+    document.getElementById('pushArticle').value = '';
+    document.getElementById('pushQty').value = '';
+    document.getElementById('pushReason').value = '';
+    toast('Article ajouté. / Artikel toegevoegd.');
+  } catch (e) {
+    console.error(e);
+    toast("Échec de l'ajout. Réessayez. / Toevoegen mislukt. Probeer opnieuw.");
+  } finally {
+    btn.disabled = false;
+  }
+});
 
 loadOrder();
 </script>

@@ -548,8 +548,11 @@ async function handleVerifyCheck(checkbox) {
     if (order) { order.verified_at = new Date().toISOString(); order.verified_by = trimmed; }
 
     let msg;
-    if (result.diffCount > 0) {
-      msg = `Vérifié. ${result.diffCount} écart(s) détecté(s) : le magasin sera prévenu par email dans le récapitulatif de 18h. / Geverifieerd. ${result.diffCount} afwijking(en): de winkel wordt om 18u per e-mail verwittigd.`;
+    if (result.diffCount > 0 || result.pushCount > 0) {
+      const parts = [];
+      if (result.diffCount > 0) parts.push(`${result.diffCount} écart(s)`);
+      if (result.pushCount > 0) parts.push(`${result.pushCount} article(s) ajouté(s) par le centre`);
+      msg = `Vérifié. ${parts.join(' et ')} : le magasin sera prévenu par email dans le récapitulatif de 18h. / Geverifieerd. De winkel wordt om 18u per e-mail verwittigd.`;
     } else {
       msg = 'Vérifié. Aucun écart, aucun email à envoyer. / Geverifieerd. Geen afwijkingen.';
     }
@@ -615,7 +618,7 @@ function renderOrdersTable(orders, allLinesForScope) {
             <table class="lines-table">
               <thead><tr><th>Catégorie / Categorie</th><th>Article (FR)</th><th>Article (NL)</th><th>Quantité / Aantal</th><th>Pr&eacute;lev&eacute; / Opgehaald</th></tr></thead>
               <tbody>
-                ${lines.map(l => `<tr><td>${escapeHtml(l.category)}</td><td>${escapeHtml(l.article_fr)}</td><td>${escapeHtml(l.article_nl)}</td><td>${l.quantity}</td><td>${l.quantity_picked !== null && l.quantity_picked !== undefined ? l.quantity_picked : '-'}</td></tr>`).join('')}
+                ${lines.map(l => `<tr${l.source === 'push' ? ' style="background:#f3f8fe;"' : ''}><td>${escapeHtml(l.category)}</td><td>${escapeHtml(l.article_fr)}${l.source === 'push' ? ' <span style="background:#e3eefb;color:#1b4f8f;border:1px solid #b5cdee;border-radius:4px;font-size:10px;font-weight:700;padding:1px 6px;">PUSH</span>' : ''}</td><td>${escapeHtml(l.article_nl)}</td><td>${l.source === 'push' ? '&mdash;' : l.quantity}</td><td>${l.quantity_picked !== null && l.quantity_picked !== undefined ? l.quantity_picked : '-'}</td></tr>`).join('')}
               </tbody>
             </table>
           ` : "<em>Aucune ligne d'article (commande logistique uniquement). / Geen artikelregel (enkel logistieke bestelling).</em>"}

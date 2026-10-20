@@ -396,7 +396,7 @@ function renderOrdersTable(orders, allLinesForScope) {
           <table class="lines-table">
             <thead><tr><th>Sous-catégorie / Subcategorie</th><th>Article (FR)</th><th>Article (NL)</th><th>Commandé / Besteld</th><th>Pr&eacute;lev&eacute; / Opgehaald</th></tr></thead>
             <tbody>
-              ${lines.map(l => `<tr><td>${escapeHtml(l.category)}</td><td>${escapeHtml(l.article_fr)}</td><td>${escapeHtml(l.article_nl)}</td><td>${l.quantity}</td><td>${l.quantity_picked !== null && l.quantity_picked !== undefined ? l.quantity_picked : '-'}</td></tr>`).join('')}
+              ${lines.map(l => `<tr><td>${escapeHtml(l.category)}</td><td>${escapeHtml(l.article_fr)}${l.source === 'push' ? ' <strong>[PUSH]</strong>' : ''}</td><td>${escapeHtml(l.article_nl)}</td><td>${l.source === 'push' ? '&mdash;' : l.quantity}</td><td>${l.quantity_picked !== null && l.quantity_picked !== undefined ? l.quantity_picked : '-'}</td></tr>`).join('')}
             </tbody>
           </table>
         </td>
