@@ -137,6 +137,7 @@
   .textile-note .textile-note-text { flex: 1; font-size: 13px; color: var(--oxfam-dark); }
   .textile-note .textile-note-text .fr { font-weight: 700; }
   .textile-note .textile-note-text .nl { font-weight: 400; color: #3f5a2e; margin-top: 2px; }
+  .textile-note .textile-note-text a { color: var(--oxfam-dark); text-decoration: underline; }
   /* The single remaining remarks field (remarques_logistique) - made
      deliberately prominent since it's now the only place for any note
      about the order, and it's what gets surfaced in a banner on
@@ -1174,14 +1175,13 @@ const INFO_CATEGORIES = [
     extraColumns: () => ([
       {key:'os', label:'OS', type:'select', options: DATA.osOptions}
     ]) },
+  { prefix:'tablet', title:{fr:'Tablettes', nl:'Tablets', both:'Tablettes / Tablets'}, addLabel:{fr:'+ Ajouter une ligne tablette', nl:'+ Tabletrij toevoegen', both:'+ Ajouter une ligne tablette / Tabletrij toevoegen'}, extraColumns: remarqueCol },
   { prefix:'display', title:{fr:'Écrans', nl:'Schermen', both:'Écrans / Schermen'}, addLabel:{fr:'+ Ajouter une ligne écran', nl:'+ Schermrij toevoegen', both:'+ Ajouter une ligne écran / Schermrij toevoegen'}, extraColumns: remarqueCol },
   { prefix:'accessoire', title:{fr:'Accessoires', nl:'Accessoires', both:'Accessoires'}, addLabel:{fr:'+ Ajouter une ligne accessoire', nl:'+ Accessoirerij toevoegen', both:'+ Ajouter une ligne accessoire / Accessoirerij toevoegen'}, extraColumns: remarqueCol },
   { prefix:'misc', title:{fr:'Divers', nl:'Overige', both:'Divers / Overige'}, addLabel:{fr:'+ Ajouter une ligne', nl:'+ Rij toevoegen', both:'+ Ajouter une ligne / Rij toevoegen'}, extraColumns: remarqueCol },
   { prefix:'printer', title:{fr:'Imprimantes', nl:'Printers', both:'Imprimantes / Printers'}, addLabel:{fr:'+ Ajouter une ligne imprimante', nl:'+ Printerrij toevoegen', both:'+ Ajouter une ligne imprimante / Printerrij toevoegen'}, extraColumns: remarqueCol },
   { prefix:'projector', title:{fr:'Projecteurs', nl:'Projectors', both:'Projecteurs / Projectors'}, addLabel:{fr:'+ Ajouter une ligne projecteur', nl:'+ Projectorrij toevoegen', both:'+ Ajouter une ligne projecteur / Projectorrij toevoegen'}, extraColumns: remarqueCol },
-  { prefix:'smartphone', title:{fr:'Smartphones', nl:'Smartphones', both:'Smartphones'}, addLabel:{fr:'+ Ajouter une ligne smartphone', nl:'+ Smartphonerij toevoegen', both:'+ Ajouter une ligne smartphone / Smartphonerij toevoegen'}, extraColumns: remarqueCol },
-  { prefix:'tablet', title:{fr:'Tablettes', nl:'Tablets', both:'Tablettes / Tablets'}, addLabel:{fr:'+ Ajouter une ligne tablette', nl:'+ Tabletrij toevoegen', both:'+ Ajouter une ligne tablette / Tabletrij toevoegen'}, extraColumns: remarqueCol }
-];
+  { prefix:'smartphone', title:{fr:'Smartphones', nl:'Smartphones', both:'Smartphones'}, addLabel:{fr:'+ Ajouter une ligne smartphone', nl:'+ Smartphonerij toevoegen', both:'+ Ajouter une ligne smartphone / Smartphonerij toevoegen'}, extraColumns: remarqueCol },];
 INFO_CATEGORIES.forEach(cat => {
   cat.btnId = `btnAdd${cat.prefix.charAt(0).toUpperCase()}${cat.prefix.slice(1)}Row`;
 });
@@ -1203,6 +1203,13 @@ function buildInformatiqueCard() {
     "Une ligne par type de produit. Les modèles et le stock disponible viennent d'Odoo (seuls les articles en stock sont proposés).",
     'Één regel per producttype. De modellen en de beschikbare voorraad komen uit Odoo (enkel artikelen op voorraad worden voorgesteld).'
   )}));
+
+  // Promotion banner (same look as the textile monthly note). Edit the
+  // texts/price here, or delete this block when the promotion ends.
+  const promoLink = '<a href="https://oxfamit.odoo.com/shop/access-pack-microsoft-surface-pro-7-97?category=4" target="_blank" rel="noopener noreferrer">MS Surface Pro 7 Access Pack</a>';
+  const promoFr = `<div class="fr">Promotion : ${promoLink} : Tablette + Clavier + Souris + Docking Station + Housse pour 199€ !</div>`;
+  const promoNl = `<div class="nl">Promotie: ${promoLink}: tablet + toetsenbord + muis + dockingstation + hoes voor 199€!</div>`;
+  card.appendChild(el('div', {class:'textile-note', html: `<span class="textile-note-icon">🏷️</span><span class="textile-note-text">${bi(promoFr, promoNl, promoFr + promoNl)}</span>`}));
 
   INFO_CATEGORIES.forEach(cat => {
     card.appendChild(el('h3', {text: bi(cat.title.fr, cat.title.nl, cat.title.both)}));
