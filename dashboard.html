@@ -549,11 +549,9 @@ async function handleVerifyCheck(checkbox) {
 
     let msg;
     if (result.diffCount > 0) {
-      msg = result.emailSent
-        ? `Vérifié. ${result.diffCount} écart(s) détecté(s), email envoyé au magasin.`
-        : `Vérifié. ${result.diffCount} écart(s), mais l'email a échoué (${result.emailError || 'raison inconnue'}).`;
+      msg = `Vérifié. ${result.diffCount} écart(s) détecté(s) : le magasin sera prévenu par email dans le récapitulatif de 18h. / Geverifieerd. ${result.diffCount} afwijking(en): de winkel wordt om 18u per e-mail verwittigd.`;
     } else {
-      msg = 'Vérifié. Aucun écart, pas d\'email envoyé.';
+      msg = 'Vérifié. Aucun écart, aucun email à envoyer. / Geverifieerd. Geen afwijkingen.';
     }
     if (result.unpickedCount > 0) {
       msg += ` Attention : ${result.unpickedCount} ligne(s) pas encore préparée(s).`;
