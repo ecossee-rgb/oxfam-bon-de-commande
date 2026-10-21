@@ -445,9 +445,44 @@ function unlockSection(card, tableBody, nameInput, btn) {
 // logistics-picked-columns-migration.sql, so the original request stays
 // visible after this section is confirmed).
 const LOGISTICS_FIELDS = [
-  { orderKey: 'nb_cartons_livres', pickedKey: 'nb_cartons_livres_picked', label: "Je veux des cartons vides pour livres / Ik wil kartonnen dozen voor boeken" },
-  { orderKey: 'nb_bacs_jaunes', pickedKey: 'nb_bacs_jaunes_picked', label: "Je veux des bacs jaunes pour déchets / Ik wil gele bakken voor afval" },
+  { type: 'choice', orderKey: 'want_delivery', pickedKey: 'want_delivery_picked', label: "Je veux une livraison / Ik wil een levering" },
+  { type: 'choice', orderKey: 'want_transfer', pickedKey: 'want_transfer_picked', label: "Je veux un transfert / Ik wil een transfert" },
+  { type: 'choice', orderKey: 'want_return', pickedKey: 'want_return_picked', label: "Je veux une reprise / Ik wil een terugkeer" },
+  { type: 'number', orderKey: 'nb_chariots', pickedKey: 'nb_chariots_picked', label: "Nombre de chariots / Aantal rolkarren" },
+  { type: 'number', orderKey: 'nb_bacs_it', pickedKey: 'nb_bacs_it_picked', label: "Bacs réparations IT (transport de valeur) / Bakken reparaties IT" },
+  { type: 'number', orderKey: 'nb_sacs_monnaie', pickedKey: 'nb_sacs_monnaie_picked', label: "Sacs de monnaie / Zakken kleingeld" },
+  { type: 'number', orderKey: 'nb_cartons_livres', pickedKey: 'nb_cartons_livres_picked', label: "Je veux des cartons vides pour livres / Ik wil kartonnen dozen voor boeken" },
+  { type: 'number', orderKey: 'nb_bacs_jaunes', pickedKey: 'nb_bacs_jaunes_picked', label: "Je veux des bacs jaunes pour déchets / Ik wil gele bakken voor afval" },
+  { type: 'flag', orderKey: 'farde_compta', pickedKey: 'farde_compta_picked', label: "Farde de comptabilité jointe / Map met boekhouding bijgevoegd" },
+  { type: 'flag', orderKey: 'vidange_oft', pickedKey: 'vidange_oft_picked', label: "Vidange produits OFT / Leeggoed producten OFT" },
 ];
+// Helpers: every field is shown as an editable control next to what the
+// shop asked for. choice = oui/non select, flag = yes/no select (stored as
+// a boolean), number = number input.
+function logisticsControlValue(f, raw) {
+  if (f.type === 'flag') return raw === true ? 'oui' : (raw === false ? 'non' : '');
+  if (raw === null || raw === undefined) return '';
+  return String(raw);
+}
+function logisticsOrderedText(f, raw) {
+  if (f.type === 'number') return (raw === null || raw === undefined) ? '0' : String(raw);
+  const v = logisticsControlValue(f, raw);
+  return v === 'oui' ? 'Oui / Ja' : (v === 'non' ? 'Non / Neen' : '-');
+}
+function readLogisticsControl(f, input) {
+  const v = input.value;
+  if (f.type === 'number') return v === '' ? null : parseFloat(v);
+  if (f.type === 'flag') return v === '' ? null : v === 'oui';
+  return v === '' ? null : v;
+}
+function logisticsDiffers(f, orderedRaw, input) {
+  if (f.type === 'number') {
+    const val = input.value === '' ? NaN : parseFloat(input.value);
+    return !isNaN(val) && val !== parseFloat(orderedRaw || 0);
+  }
+  const ordered = f.type === 'flag' ? (orderedRaw ? 'oui' : 'non') : (orderedRaw || '');
+  return input.value !== '' && input.value !== ordered;
+}
 
 function lockLogisticsSection(card, inputs, nameInput, btn, name) {
   card.classList.add('done');
@@ -500,22 +535,40 @@ function renderLogisticsSection(order) {
   const inputs = [];
   LOGISTICS_FIELDS.forEach(f => {
     const orderedVal = order[f.orderKey];
-    const orderedText = (orderedVal !== null && orderedVal !== undefined) ? String(orderedVal) : '0';
-    const pickedVal = (order[f.pickedKey] !== null && order[f.pickedKey] !== undefined) ? order[f.pickedKey] : orderedVal;
+    const pickedRaw = (order[f.pickedKey] !== null && order[f.pickedKey] !== undefined) ? order[f.pickedKey] : orderedVal;
 
     const tr = el('tr');
     tr.appendChild(el('td', { class: 'article-logistics', text: f.label }));
-    tr.appendChild(el('td', { class: 'num', text: orderedText }));
+    tr.appendChild(el('td', { class: 'num', text: logisticsOrderedText(f, orderedVal) }));
     const tdPicked = el('td', { class: 'num' });
-    const input = el('input', { type: 'number', min: '0', 'data-key': f.orderKey, value: (pickedVal !== null && pickedVal !== undefined) ? String(pickedVal) : '' });
+    let input;
+    if (f.type === 'number') {
+      input = el('input', { type: 'number', min: '0', 'data-key': f.orderKey, value: logisticsControlValue(f, pickedRaw) });
+    } else {
+      input = el('select', { 'data-key': f.orderKey, class: 'push-select', style: 'width:100px;padding:6px 8px;' });
+      [['', '-'], ['oui', 'Oui / Ja'], ['non', 'Non / Neen']].forEach(([v, t]) => input.appendChild(el('option', { value: v, text: t })));
+      input.value = logisticsControlValue(f, pickedRaw);
+    }
     if (isDone) input.disabled = true;
-    input.addEventListener('input', () => updateDiffHighlight(tr, input, orderedVal || 0));
+    const refresh = () => tr.classList.toggle('diff-row', logisticsDiffers(f, orderedVal, input));
+    input.addEventListener(f.type === 'number' ? 'input' : 'change', refresh);
+    input._field = f;
     inputs.push(input);
     tdPicked.appendChild(input);
     tr.appendChild(tdPicked);
-    updateDiffHighlight(tr, input, orderedVal || 0);
+    refresh();
     tbody.appendChild(tr);
   });
+  // The shop's explanation for returning IT bins is text, shown for
+  // information only (it is not a quantity to prepare).
+  let bacsItReason = '';
+  try { bacsItReason = (order.form_snapshot && order.form_snapshot.fields && order.form_snapshot.fields.bacsITReason) || ''; } catch (e) { bacsItReason = ''; }
+  if (bacsItReason) {
+    const trR = el('tr');
+    trR.appendChild(el('td', { class: 'article-logistics', text: 'Raison du retour (bacs IT) / Reden van de terugkeer' }));
+    trR.appendChild(el('td', { colspan: '2', text: bacsItReason }));
+    tbody.appendChild(trR);
+  }
   table.appendChild(tbody);
   card.appendChild(table);
 
@@ -544,7 +597,7 @@ function renderLogisticsSection(order) {
       return;
     }
     const values = {};
-    inputs.forEach(i => { values[i.getAttribute('data-key')] = i.value === '' ? null : parseFloat(i.value); });
+    inputs.forEach(i => { values[i.getAttribute('data-key')] = readLogisticsControl(i._field, i); });
 
     btn.disabled = true;
     toast('Enregistrement en cours... / Bezig met opslaan...');
