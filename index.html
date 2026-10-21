@@ -1159,6 +1159,11 @@ function updateOsOptionsForRow(prefix, idx) {
 function remarqueCol() {
   return [{key:'remarque', label:bi('Remarque','Opmerking'), type:'text'}];
 }
+// "Divers" has no Odoo stock list to choose a model from (the dropdown was
+// always empty), so the shop just describes what it needs, in free text.
+function descriptionCol() {
+  return [{key:'description', label:bi('Description','Beschrijving'), type:'text'}];
+}
 
 // One entry per Odoo product category shown in the Informatique section.
 // "prefix" doubles as the category query param sent to the odoo-stock
@@ -1180,7 +1185,7 @@ const INFO_CATEGORIES = [
   { prefix:'tablet', title:{fr:'Tablettes', nl:'Tablets', both:'Tablettes / Tablets'}, addLabel:{fr:'+ Ajouter une ligne tablette', nl:'+ Tabletrij toevoegen', both:'+ Ajouter une ligne tablette / Tabletrij toevoegen'}, extraColumns: remarqueCol },
   { prefix:'display', title:{fr:'Écrans', nl:'Schermen', both:'Écrans / Schermen'}, addLabel:{fr:'+ Ajouter une ligne écran', nl:'+ Schermrij toevoegen', both:'+ Ajouter une ligne écran / Schermrij toevoegen'}, extraColumns: remarqueCol },
   { prefix:'accessoire', title:{fr:'Accessoires', nl:'Accessoires', both:'Accessoires'}, addLabel:{fr:'+ Ajouter une ligne accessoire', nl:'+ Accessoirerij toevoegen', both:'+ Ajouter une ligne accessoire / Accessoirerij toevoegen'}, extraColumns: remarqueCol },
-  { prefix:'misc', title:{fr:'Divers', nl:'Overige', both:'Divers / Overige'}, addLabel:{fr:'+ Ajouter une ligne', nl:'+ Rij toevoegen', both:'+ Ajouter une ligne / Rij toevoegen'}, extraColumns: remarqueCol },
+  { prefix:'misc', title:{fr:'Divers', nl:'Overige', both:'Divers / Overige'}, addLabel:{fr:'+ Ajouter une ligne', nl:'+ Rij toevoegen', both:'+ Ajouter une ligne / Rij toevoegen'}, extraColumns: descriptionCol },
   { prefix:'printer', title:{fr:'Imprimantes', nl:'Printers', both:'Imprimantes / Printers'}, addLabel:{fr:'+ Ajouter une ligne imprimante', nl:'+ Printerrij toevoegen', both:'+ Ajouter une ligne imprimante / Printerrij toevoegen'}, extraColumns: remarqueCol },
   { prefix:'projector', title:{fr:'Projecteurs', nl:'Projectors', both:'Projecteurs / Projectors'}, addLabel:{fr:'+ Ajouter une ligne projecteur', nl:'+ Projectorrij toevoegen', both:'+ Ajouter une ligne projecteur / Projectorrij toevoegen'}, extraColumns: remarqueCol },
   { prefix:'smartphone', title:{fr:'Smartphones', nl:'Smartphones', both:'Smartphones'}, addLabel:{fr:'+ Ajouter une ligne smartphone', nl:'+ Smartphonerij toevoegen', both:'+ Ajouter une ligne smartphone / Smartphonerij toevoegen'}, extraColumns: remarqueCol },];
@@ -1193,7 +1198,8 @@ const INFO_COLUMN_LABELS_FR = { modele:'Modèle', os:'OS', clavier:'Clavier', re
 const INFO_COLUMN_LABELS_NL = { modele:'Model', os:'OS', clavier:'Toetsenbord', remarque:'Opmerking', commande:'Besteld' };
 
 function infoColumns(cat) {
-  return [{key:'modele', label:bi('Modèle','Model'), type:'select', options: odooStockOptions[cat.prefix]}]
+  const modelCol = cat.prefix === 'misc' ? [] : [{key:'modele', label:bi('Modèle','Model'), type:'select', options: odooStockOptions[cat.prefix]}];
+  return modelCol
     .concat(cat.extraColumns())
     .concat([{key:'commande', label:bi('Commandé','Besteld'), type:'number'}]);
 }
@@ -1599,6 +1605,16 @@ function hasInformatiqueLines() {
 // Excel files but were silently left out of the saved order, the
 // dashboard and the Informatique email. Returns the category titles
 // concerned so the shop can fix them before sending.
+function miscRowsMissingDescription() {
+  const store = storeSelect.value;
+  const flags = DATA.stores[store] || {};
+  if (!flags.informatique) return false;
+  const cat = INFO_CATEGORIES.find(c => c.prefix === 'misc');
+  const cols = infoColumns(cat);
+  const qtyIdx = cols.findIndex(c => c.key === 'commande');
+  const descIdx = cols.findIndex(c => c.key === 'description');
+  return collectDeviceRows(cat.prefix, cols).some(r => parseFloat(r[qtyIdx]) > 0 && !(r[descIdx] || '').trim());
+}
 function informatiqueRowsMissingQty() {
   const store = storeSelect.value;
   const flags = DATA.stores[store] || {};
@@ -2094,6 +2110,13 @@ document.getElementById('btnSend').addEventListener('click', async () => {
     return;
   }
 
+  if (miscRowsMissingDescription()) {
+    toast(bi(
+      'Informatique - Divers : indiquez une description pour chaque ligne commandée.',
+      'Informatica - Overige: geef een beschrijving op voor elke bestelde regel.'
+    ));
+    return;
+  }
   const missingQty = informatiqueRowsMissingQty();
   if (missingQty.length) {
     toast(bi(
