@@ -335,8 +335,6 @@ async function fetchAll() {
 
     statusMsg.textContent = `${allOrders.length} commande(s) chargée(s). / ${allOrders.length} bestelling(en) geladen.` +
       (archivedCount ? ` (${archivedCount} commande(s) archivée(s), date de livraison passée. / (${archivedCount} bestelling(en) gearchiveerd, leveringsdatum verstreken.)` : '');
-    const archiveLink = document.getElementById('archiveLink');
-    if (archiveLink) archiveLink.textContent = `Archives (${archivedCount}) / Archief (${archivedCount})`;
     populateFilterOptions();
     renderAll();
   } catch (e) {
