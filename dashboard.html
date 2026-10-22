@@ -122,6 +122,13 @@
   .verify-done { font-size: 11px; color: #1e6b3a; margin-top: 3px; }
   .verify-email-failed { font-size: 11px; color: #a12b2b; margin-top: 4px; }
   #toast { position: fixed; top: 16px; right: 16px; background: var(--oxfam-dark); color: white; padding: 10px 16px; border-radius: 8px; font-size: 13px; display: none; z-index: 999; max-width: 340px; }
+  /* Fixed navigation tabs shared by index / dashboard / informatique /
+     archive (same four tabs, same order, on every page). Sticky so they stay
+     put while scrolling. */
+  nav.tabs { position: sticky; top: 0; z-index: 50; background: white; border-bottom: 2px solid #d7ded9; display: flex; gap: 4px; padding: 0 16px; overflow-x: auto; }
+  nav.tabs a.tab { padding: 12px 18px; font-size: 14px; font-weight: 700; color: #336114; text-decoration: none; border-bottom: 4px solid transparent; margin-bottom: -2px; white-space: nowrap; font-family: inherit; }
+  nav.tabs a.tab:hover { background: #f2f6ec; }
+  nav.tabs a.tab.active { border-bottom-color: #44841A; color: #1a1a1a; background: #f2f6ec; }
 </style>
 </head>
 <body>
@@ -134,12 +141,13 @@
       <p>Oxfam Secondhand &mdash; toutes les commandes envoyées via le formulaire / alle bestellingen verzonden via het formulier</p>
     </div>
   </div>
-  <div class="header-actions">
-    <a class="btn-header" href="./index.html">&larr; Retour au formulaire / Terug naar het formulier</a>
-    <a class="btn-header" href="./informatique.html">Vue informatique (atelier IT) / IT-weergave (IT-werkplaats) &rarr;</a>
-    <a class="btn-header" href="./archive.html" id="archiveLink">Commandes archivées / Gearchiveerde bestellingen &rarr;</a>
-  </div>
 </header>
+<nav class="tabs">
+  <a class="tab" href="./index.html">Commander / Bestellen</a>
+  <a class="tab active" href="./dashboard.html" aria-current="page">Suivi / Opvolging</a>
+  <a class="tab" href="./informatique.html">IT</a>
+  <a class="tab" href="./archive.html" id="archiveLink">Archives / Archief</a>
+</nav>
 
 <div class="wrap">
 
@@ -328,7 +336,7 @@ async function fetchAll() {
     statusMsg.textContent = `${allOrders.length} commande(s) chargée(s). / ${allOrders.length} bestelling(en) geladen.` +
       (archivedCount ? ` (${archivedCount} commande(s) archivée(s), date de livraison passée. / (${archivedCount} bestelling(en) gearchiveerd, leveringsdatum verstreken.)` : '');
     const archiveLink = document.getElementById('archiveLink');
-    if (archiveLink) archiveLink.textContent = `Commandes archivées (${archivedCount}) / Gearchiveerde bestellingen (${archivedCount}) →`;
+    if (archiveLink) archiveLink.textContent = `Archives (${archivedCount}) / Archief (${archivedCount})`;
     populateFilterOptions();
     renderAll();
   } catch (e) {
@@ -622,13 +630,15 @@ function renderOrdersTable(orders, allLinesForScope) {
               </tbody>
             </table>
           ` : "<em>Aucune ligne d'article (commande logistique uniquement). / Geen artikelregel (enkel logistieke bestelling).</em>"}
-          ${o.nb_chariots || o.nb_bacs_it || o.nb_sacs_monnaie || o.nb_cartons_livres || o.nb_bacs_jaunes ? `
+          ${o.nb_chariots || o.nb_bacs_it || o.nb_sacs_monnaie || o.nb_cartons_livres || o.nb_bacs_jaunes || o.farde_compta || o.vidange_oft ? `
             <div style="margin-top:6px; font-size:12px; color:#555;">
               ${o.nb_chariots ? `Chariots retour / Rolkarren terugkeer: ${o.nb_chariots}. ` : ''}
               ${o.nb_bacs_it ? `Bacs réparations IT / Bakken reparaties IT: ${o.nb_bacs_it}. ` : ''}
               ${o.nb_sacs_monnaie ? `Sacs monnaie / Zakken kleingeld: ${o.nb_sacs_monnaie}. ` : ''}
               ${o.nb_cartons_livres ? `Cartons livres / Kartonnen dozen boeken: ${o.nb_cartons_livres}. ` : ''}
-              ${o.nb_bacs_jaunes ? `Bacs jaunes / Gele bakken: ${o.nb_bacs_jaunes}.` : ''}
+              ${o.nb_bacs_jaunes ? `Bacs jaunes / Gele bakken: ${o.nb_bacs_jaunes}. ` : ''}
+              ${o.farde_compta ? `Farde de comptabilité jointe / Map met boekhouding bijgevoegd. ` : ''}
+              ${o.vidange_oft ? `Vidange produits OFT / Leeggoed producten OFT.` : ''}
             </div>
           ` : ''}
         </td>

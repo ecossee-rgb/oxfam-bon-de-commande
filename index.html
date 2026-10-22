@@ -176,6 +176,13 @@
   .qty-row:nth-child(odd) { background: #fafcfb; }
   .qty-row-label { font-size: 13px; font-weight: 600; color: #333; }
   .qty-row input.qty-input { width: 90px; flex-shrink: 0; text-align: center; }
+  /* Fixed navigation tabs shared by index / dashboard / informatique /
+     archive (same four tabs, same order, on every page). Sticky so they stay
+     put while scrolling. */
+  nav.tabs { position: sticky; top: 0; z-index: 50; background: white; border-bottom: 2px solid #d7ded9; display: flex; gap: 4px; padding: 0 16px; overflow-x: auto; }
+  nav.tabs a.tab { padding: 12px 18px; font-size: 14px; font-weight: 700; color: #336114; text-decoration: none; border-bottom: 4px solid transparent; margin-bottom: -2px; white-space: nowrap; font-family: inherit; }
+  nav.tabs a.tab:hover { background: #f2f6ec; }
+  nav.tabs a.tab.active { border-bottom-color: #44841A; color: #1a1a1a; background: #f2f6ec; }
 </style>
 </head>
 <body>
@@ -186,10 +193,15 @@
     <div>
       <h1 id="mainTitle">Bon de commande - Bestelbon</h1>
       <p id="mainSubtitle">A envoyer au moins 3 jours ouvrables avant la date de livraison souhaitée (2 pour Shop Vintage). / Op te sturen ten minste 3 werkdagen v&oacute;&oacute;r de gewenste leverdatum (2 voor Shop Vintage).</p>
-      <p><a href="./dashboard.html" id="dashboardLink" style="color:white;">Voir le suivi de toutes les commandes / Bekijk de opvolging van alle bestellingen &rarr;</a></p>
     </div>
   </div>
 </header>
+<nav class="tabs">
+  <a class="tab active" href="./index.html" aria-current="page">Commander / Bestellen</a>
+  <a class="tab" href="./dashboard.html">Suivi / Opvolging</a>
+  <a class="tab" href="./informatique.html">IT</a>
+  <a class="tab" href="./archive.html" id="archiveLink">Archives / Archief</a>
+</nav>
 
 <div class="wrap">
 
@@ -372,7 +384,6 @@ function applyStaticLangText() {
     'A envoyer au moins 3 jours ouvrables avant la date de livraison souhaitée (2 pour Shop Vintage).',
     'Op te sturen ten minste 3 werkdagen vóór de gewenste leverdatum (2 voor Shop Vintage).'
   ));
-  setText('dashboardLink', bi('Voir le suivi de toutes les commandes →', 'Bekijk de opvolging van alle bestellingen →', 'Voir le suivi de toutes les commandes / Bekijk de opvolging van alle bestellingen →'));
   setText('card1Title', bi('1. Magasin & livraison', '1. Winkel & levering', '1. Magasin & livraison / Winkel & levering'));
   setText('lblStoreName', bi('Nom du magasin', 'Naam winkel'));
   setText('lblDeliveryDate', bi('Date de livraison', 'Leveringsdatum'));

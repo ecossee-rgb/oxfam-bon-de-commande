@@ -100,6 +100,13 @@
   .empty-msg { color: #888; font-style: italic; font-size: 13px; padding: 20px; text-align: center; }
   .status-msg { font-size: 13px; color: #666; margin-bottom: 10px; }
   .action-link { display: block; color: var(--oxfam-green); font-weight: 600; text-decoration: none; font-size: 12px; margin-bottom: 4px; }
+  /* Fixed navigation tabs shared by index / dashboard / informatique /
+     archive (same four tabs, same order, on every page). Sticky so they stay
+     put while scrolling. */
+  nav.tabs { position: sticky; top: 0; z-index: 50; background: white; border-bottom: 2px solid #d7ded9; display: flex; gap: 4px; padding: 0 16px; overflow-x: auto; }
+  nav.tabs a.tab { padding: 12px 18px; font-size: 14px; font-weight: 700; color: #336114; text-decoration: none; border-bottom: 4px solid transparent; margin-bottom: -2px; white-space: nowrap; font-family: inherit; }
+  nav.tabs a.tab:hover { background: #f2f6ec; }
+  nav.tabs a.tab.active { border-bottom-color: #44841A; color: #1a1a1a; background: #f2f6ec; }
 </style>
 </head>
 <body>
@@ -112,8 +119,13 @@
       <p>Vue filtrée : uniquement les articles informatique de toutes les commandes. / Gefilterd overzicht: enkel de informatica-artikelen van alle bestellingen.</p>
     </div>
   </div>
-  <a class="btn-header" href="./dashboard.html">&larr; Retour au suivi complet / Terug naar de volledige opvolging</a>
 </header>
+<nav class="tabs">
+  <a class="tab" href="./index.html">Commander / Bestellen</a>
+  <a class="tab" href="./dashboard.html">Suivi / Opvolging</a>
+  <a class="tab active" href="./informatique.html" aria-current="page">IT</a>
+  <a class="tab" href="./archive.html" id="archiveLink">Archives / Archief</a>
+</nav>
 
 <div class="wrap">
 

@@ -112,6 +112,13 @@
   .verify-progress { font-size: 11px; color: #888; margin-top: 3px; }
   .verify-done { font-size: 11px; color: #1e6b3a; margin-top: 3px; }
   #toast { position: fixed; top: 16px; right: 16px; background: var(--oxfam-dark); color: white; padding: 10px 16px; border-radius: 8px; font-size: 13px; display: none; z-index: 999; max-width: 340px; }
+  /* Fixed navigation tabs shared by index / dashboard / informatique /
+     archive (same four tabs, same order, on every page). Sticky so they stay
+     put while scrolling. */
+  nav.tabs { position: sticky; top: 0; z-index: 50; background: white; border-bottom: 2px solid #d7ded9; display: flex; gap: 4px; padding: 0 16px; overflow-x: auto; }
+  nav.tabs a.tab { padding: 12px 18px; font-size: 14px; font-weight: 700; color: #336114; text-decoration: none; border-bottom: 4px solid transparent; margin-bottom: -2px; white-space: nowrap; font-family: inherit; }
+  nav.tabs a.tab:hover { background: #f2f6ec; }
+  nav.tabs a.tab.active { border-bottom-color: #44841A; color: #1a1a1a; background: #f2f6ec; }
 </style>
 </head>
 <body>
@@ -124,11 +131,13 @@
       <p>Commandes dont la date de livraison est passée / Bestellingen waarvan de leveringsdatum voorbij is</p>
     </div>
   </div>
-  <div class="header-actions">
-    <a class="btn-header" href="./dashboard.html">&larr; Retour au suivi principal / Terug naar de hoofdopvolging</a>
-    <a class="btn-header" href="./index.html">Retour au formulaire / Terug naar het formulier &rarr;</a>
-  </div>
 </header>
+<nav class="tabs">
+  <a class="tab" href="./index.html">Commander / Bestellen</a>
+  <a class="tab" href="./dashboard.html">Suivi / Opvolging</a>
+  <a class="tab" href="./informatique.html">IT</a>
+  <a class="tab active" href="./archive.html" id="archiveLink" aria-current="page">Archives / Archief</a>
+</nav>
 
 <div class="wrap">
 
@@ -537,9 +546,6 @@ function renderOrdersTable(orders, allLinesForScope) {
           ${o.picking_completed_at ? `<div style="font-size:11px; color:#666; margin-top:3px;">${escapeHtml(o.picked_by || '')}</div>` : ''}
         </td>
         <td>
-          ${o.picking_completed_at || o.verified_at
-            ? `<span class="action-link" style="color:#999; cursor:default;" title="D&eacute;j&agrave; pr&eacute;par&eacute;e / vérifi&eacute;e, non modifiable / Al voorbereid / geverifieerd, niet meer wijzigbaar">Modifier / Wijzigen</span>`
-            : `<a href="index.html?edit=${encodeURIComponent(o.id)}" class="action-link">Modifier / Wijzigen</a>`}
           <a href="picking.html?order=${encodeURIComponent(o.id)}" class="action-link">Pr&eacute;parer / Klaarmaken</a>
         </td>
         <td>${verifyCellHtml(o, lines)}</td>
