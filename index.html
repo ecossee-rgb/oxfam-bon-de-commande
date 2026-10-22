@@ -138,6 +138,10 @@
   .textile-note .textile-note-text .fr { font-weight: 700; }
   .textile-note .textile-note-text .nl { font-weight: 400; color: #3f5a2e; margin-top: 2px; }
   .textile-note .textile-note-text a { color: var(--oxfam-dark); text-decoration: underline; }
+  /* One-line pointer to the Odoo webshop, shown above the promo note: bolder/larger than body text but lighter than the note itself. */
+  .webshop-line { margin: 6px 0 10px; font-size: 15px; font-weight: 700; }
+  .webshop-line a { color: var(--oxfam-green); text-decoration: underline; }
+  .webshop-line a:hover { color: var(--oxfam-dark); }
   /* The single remaining remarks field (remarques_logistique) - made
      deliberately prominent since it's now the only place for any note
      about the order, and it's what gets surfaced in a banner on
@@ -1254,6 +1258,11 @@ function buildInformatiqueCard() {
     "Une ligne par type de produit. Les modèles et le stock disponible viennent d'Odoo (seuls les articles en stock sont proposés).",
     'Één regel per producttype. De modellen en de beschikbare voorraad komen uit Odoo (enkel artikelen op voorraad worden voorgesteld).'
   )}));
+
+  // Pointer to the Odoo webshop, shown right above the promotion banner.
+  const webshopFr = 'Vérifiez les détails des produits disponibles ici.';
+  const webshopNl = 'Controleer hier de details van de beschikbare producten.';
+  card.appendChild(el('p', {class:'webshop-line', html: `<a href="https://oxfamit.odoo.com/shop" target="_blank" rel="noopener noreferrer">${bi(webshopFr, webshopNl, webshopFr + ' / ' + webshopNl)}</a>`}));
 
   // Promotion banner (same look as the textile monthly note). Edit the
   // texts/price here, or delete this block when the promotion ends.
