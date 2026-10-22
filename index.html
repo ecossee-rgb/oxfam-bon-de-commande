@@ -1241,7 +1241,7 @@ function buildInformatiqueCard() {
 
   // Promotion banner (same look as the textile monthly note). Edit the
   // texts/price here, or delete this block when the promotion ends.
-  const promoLink = '<a href="https://oxfamit.odoo.com/shop/access-pack-microsoft-surface-pro-7-97?category=4" target="_blank" rel="noopener noreferrer">MS Surface Pro 7 Access Pack</a>';
+  const promoLink = '<a href="https://oxfamit.odoo.com/shop/access-pack-microsoft-surface-pro-7-925?search=surface#attribute_values=194,193,6,8,83,3,168,247" target="_blank" rel="noopener noreferrer">MS Surface Pro 7 Access Pack</a>';
   const promoFr = `<div class="fr">Promotion : ${promoLink} : Tablette + Clavier + Souris + Docking Station + Housse pour 199€ !</div>`;
   const promoNl = `<div class="nl">Promotie: ${promoLink}: tablet + toetsenbord + muis + dockingstation + hoes voor 199€!</div>`;
   card.appendChild(el('div', {class:'textile-note', html: `<span class="textile-note-icon">🏷️</span><span class="textile-note-text">${bi(promoFr, promoNl, promoFr + promoNl)}</span>`}));
