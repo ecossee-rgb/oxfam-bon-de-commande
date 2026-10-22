@@ -1090,6 +1090,22 @@ const MANUAL_ACCESSOIRE_OPTIONS = [
   { value: 'Clavier', manual: true, fr: 'Clavier', nl: 'Toetsenbord' },
 ];
 
+// Microsoft Surface Pro 7 is sold in 3 configurations but the physical
+// stock is shared: every tablet sits under the base Odoo product, and the
+// workshop converts one tablet per manufacturing order when it prepares the
+// order. The two derived products therefore have 0 stock in Odoo and never
+// come back from odoo-stock. Each base product (key) is followed by its
+// derived configurations (values) in the Tablettes list, with the base
+// product's quantity. The option value is the exact Odoo product name so
+// order lines, Excel, the IT email and informatique.html keep one line per
+// configuration.
+const TABLET_DERIVED_OPTIONS = {
+  'Microsoft Surface Pro 7 (no keyboard)': [
+    'Access Pack Microsoft Surface Pro 7',
+    'Microsoft Surface Pro 7 (With QWERTY keyboard + stickers)',
+  ],
+};
+
 // Builds the dropdown label for a stock option in the currently-selected
 // store's language. Kept as a function (not a pre-baked string) because
 // odooStockOptions is fetched/cached once per category but the label must
@@ -1104,9 +1120,20 @@ function ensureOdooStockLoaded(category) {
     odooStockLoaded[category] = fetchOdooStockRaw(category).then(items => {
       odooStockOptions[category].length = 0;
       if (odooStockMeta[category]) odooStockMeta[category] = {};
+      const returnedNames = new Set(items.map(it => it.name));
       items.forEach(it => {
         odooStockOptions[category].push({ value: it.name, qty: it.qty });
         if (odooStockMeta[category]) odooStockMeta[category][it.name] = it.osGroup || null;
+        // Only when the base product itself came back (enough stock), and
+        // never twice if odoo-stock already returns a derived configuration.
+        if (category === 'tablet' && TABLET_DERIVED_OPTIONS[it.name]) {
+          TABLET_DERIVED_OPTIONS[it.name].forEach(derived => {
+            if (!returnedNames.has(derived)) {
+              odooStockOptions[category].push({ value: derived, qty: it.qty });
+              returnedNames.add(derived);
+            }
+          });
+        }
       });
       if (category === 'accessoire') {
         MANUAL_ACCESSOIRE_OPTIONS.forEach(o => odooStockOptions[category].push(o));
