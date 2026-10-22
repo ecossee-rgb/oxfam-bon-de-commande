@@ -1090,7 +1090,7 @@ const MANUAL_ACCESSOIRE_OPTIONS = [
   { value: 'Clavier', manual: true, fr: 'Clavier', nl: 'Toetsenbord' },
 ];
 
-// Microsoft Surface Pro 7 is sold in 3 configurations but the physical
+// Microsoft Surface Pro 7 and Surface Pro LTE are each sold in 3 configurations but the physical
 // stock is shared: every tablet sits under the base Odoo product, and the
 // workshop converts one tablet per manufacturing order when it prepares the
 // order. The two derived products therefore have 0 stock in Odoo and never
@@ -1103,6 +1103,11 @@ const TABLET_DERIVED_OPTIONS = {
   'Microsoft Surface Pro 7 (no keyboard)': [
     'Access Pack Microsoft Surface Pro 7',
     'Microsoft Surface Pro 7 (With QWERTY keyboard + stickers)',
+  ],
+  // Note the capital K in "Keyboard" in the base product's Odoo name.
+  'Microsoft Surface Pro LTE (no Keyboard)': [
+    'Access Pack Microsoft Surface Pro LTE',
+    'Microsoft Surface Pro LTE (With QWERTY keyboard + stickers)',
   ],
 };
 
