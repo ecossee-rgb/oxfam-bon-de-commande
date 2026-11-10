@@ -1,0 +1,242 @@
+/* theme.css - shared visual refresh (November 2026) for index, dashboard,
+   informatique, archive and picking.
+   Purely visual: it only restyles existing elements (colours, spacing,
+   radius, shadows, focus states) and is loaded AFTER each page's own
+   <style> block, so it wins at equal specificity. No layout, order, wording
+   or behaviour changes. To roll the refresh back, remove the
+   <link rel="stylesheet" href="./theme.css"> line from the pages. */
+
+:root {
+  --oxfam-green: #44841A;
+  --oxfam-dark: #2f5d13;
+  --bg: #f5f7f4;
+  --border: #e3e9e0;
+  --ink: #1d2a17;
+  --muted: #5d6b57;
+  --soft-green: #eef5e6;
+  --ring: rgba(68, 132, 26, 0.22);
+  --shadow-sm: 0 1px 2px rgba(20, 45, 10, 0.05);
+  --shadow-md: 0 2px 4px rgba(20, 45, 10, 0.04), 0 8px 24px rgba(20, 45, 10, 0.06);
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-size: 15px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---- Header ---- */
+header {
+  background: linear-gradient(135deg, #4a8f1d 0%, #3b7716 100%);
+  padding: 16px 24px;
+  box-shadow: 0 2px 10px rgba(20, 45, 10, 0.15);
+}
+header h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.2px; }
+header p { font-size: 13px; opacity: 0.92; }
+.btn-header { border-radius: 10px; box-shadow: var(--shadow-sm); }
+
+/* ---- Fixed tabs ---- */
+nav.tabs {
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: saturate(1.4) blur(6px);
+  border-bottom: 1px solid var(--border);
+  box-shadow: 0 2px 8px rgba(20, 45, 10, 0.05);
+}
+nav.tabs a.tab {
+  color: var(--muted);
+  font-weight: 600;
+  padding: 13px 20px;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -1px;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+nav.tabs a.tab:hover { background: var(--soft-green); color: var(--oxfam-dark); }
+nav.tabs a.tab.active {
+  color: var(--oxfam-dark);
+  background: transparent;
+  border-bottom-color: var(--oxfam-green);
+}
+
+/* ---- Layout / cards ---- */
+.wrap { padding-top: 24px; }
+.card {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 22px 24px;
+  box-shadow: var(--shadow-md);
+}
+.card.done { background: #f3f8ee; }
+.card h2 {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--oxfam-dark);
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 10px;
+  margin-bottom: 16px;
+  letter-spacing: -0.1px;
+}
+.card h3 { font-size: 14px; color: var(--ink); }
+.chevron { color: var(--oxfam-green); }
+
+/* ---- Form controls ---- */
+label { color: var(--ink); font-size: 13px; font-weight: 600; }
+select, input[type=text], input[type=date], input[type=number], textarea {
+  background: #fff;
+  border: 1px solid #cdd7ca;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 15px;
+  color: var(--ink);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+select:hover, input[type=text]:hover, input[type=date]:hover, input[type=number]:hover, textarea:hover {
+  border-color: #aebcaa;
+}
+select:focus, input[type=text]:focus, input[type=date]:focus, input[type=number]:focus, textarea:focus {
+  outline: none;
+  border-color: var(--oxfam-green);
+  box-shadow: 0 0 0 3px var(--ring);
+}
+input:disabled, select:disabled, textarea:disabled { background: #f3f5f2; color: #8b9686; }
+input[type=checkbox], input[type=radio] { accent-color: var(--oxfam-green); }
+.hint { color: var(--muted); }
+
+/* ---- Buttons ---- */
+.btn {
+  border-radius: 10px;
+  padding: 11px 20px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  transition: background 0.15s, box-shadow 0.15s, transform 0.05s;
+}
+.btn-primary { background: var(--oxfam-green); box-shadow: 0 2px 6px rgba(68, 132, 26, 0.3); }
+.btn-primary:hover:not(:disabled) { background: var(--oxfam-dark); }
+.btn:active:not(:disabled) { transform: translateY(1px); }
+.btn-secondary { background: #fff; border: 1px solid #b9cdaa; color: var(--oxfam-dark); }
+.btn-secondary:hover:not(:disabled) { background: var(--soft-green); }
+.btn-add {
+  background: var(--soft-green);
+  border: 1px dashed #9cc17a;
+  border-radius: 10px;
+  padding: 8px 14px;
+  font-weight: 600;
+  transition: background 0.15s;
+}
+.btn-add:hover { background: #e1eed3; }
+.btn-remove { border-radius: 8px; }
+.btn-remove:hover { background: #fdecea; }
+.btn:focus-visible, .btn-add:focus-visible, .btn-header:focus-visible, a:focus-visible, summary:focus-visible {
+  outline: 3px solid var(--ring);
+  outline-offset: 2px;
+}
+
+/* ---- Sticky action bar (order form) ---- */
+.actions {
+  background: rgba(255, 255, 255, 0.97);
+  backdrop-filter: blur(6px);
+  border-top: 1px solid var(--border);
+  box-shadow: 0 -6px 20px rgba(20, 45, 10, 0.07);
+  border-radius: 14px 14px 0 0;
+}
+
+/* ---- Article / quantity lists ---- */
+.group-title {
+  background: var(--soft-green);
+  border-radius: 10px;
+  padding: 8px 12px;
+  color: var(--oxfam-dark);
+}
+.qty-list { border: 1px solid var(--border); border-radius: 12px; }
+.qty-row { padding: 9px 14px; transition: background 0.12s; }
+.qty-row:nth-child(odd) { background: #fbfcfa; }
+.qty-row:hover { background: #f3f8ee; }
+.qty-row-label { color: var(--ink); }
+.qty-row input.qty-input { border-radius: 8px; }
+table.items th, .device-table th {
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+  font-weight: 700;
+  letter-spacing: 0.3px;
+}
+table.items td { border-bottom: 1px solid #eff2ed; }
+table.items tr:hover td { background: #fafcf8; }
+.device-table input, .device-table select { border-radius: 8px; }
+
+/* ---- Notes, banners, legends ---- */
+.textile-note {
+  background: var(--soft-green);
+  border: 1px solid #cfe2bb;
+  border-left: 4px solid var(--oxfam-green);
+  border-radius: 12px;
+  padding: 12px 16px;
+}
+.textile-note .textile-note-text { color: var(--oxfam-dark); }
+.info-note { border-radius: 8px; }
+.legend { border-radius: 10px; background: #fffaeb; border-color: #f0dfaa; }
+.remarks-box { background: var(--soft-green); border: 1px solid #cfe2bb; border-radius: 12px; }
+.remarks-box textarea { border-color: #b9d3a0; }
+.banner { border-radius: 12px; }
+.remarks-banner { border-radius: 12px; }
+.webshop-line a:hover { color: var(--oxfam-dark); }
+
+/* ---- Tables (dashboard / IT / archive) ---- */
+.kpi {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: var(--shadow-sm);
+}
+.kpi .value { color: var(--oxfam-dark); }
+.kpi .label { color: var(--muted); }
+table.report th {
+  background: #f6f9f3;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+  font-weight: 700;
+  letter-spacing: 0.3px;
+}
+table.report td { border-bottom: 1px solid #eff2ed; }
+table.report tbody tr:hover { background: #f8fbf5; }
+.table-scroll { border: 1px solid var(--border); border-radius: 12px; }
+.pill { border-radius: 999px; font-weight: 600; }
+.action-link, .details-toggle { color: var(--oxfam-green); font-weight: 600; }
+.action-link:hover, .details-toggle:hover { color: var(--oxfam-dark); }
+.filters .field select, .filters .field input { border-radius: 10px; }
+.confirm-banner { border-radius: 12px; }
+.lines-table th, .lines-table td { border-color: #eff2ed; }
+
+/* ---- Picking page bits ---- */
+.order-summary strong { color: var(--oxfam-dark); }
+details.push-card summary { color: var(--oxfam-dark); }
+tr.push-row { background: #f3f8fe; }
+.push-badge { border-radius: 999px; }
+.section-footer .btn { min-height: 42px; }
+
+/* ---- Toast ---- */
+#toast {
+  border-radius: 12px;
+  box-shadow: 0 8px 28px rgba(20, 45, 10, 0.28);
+  background: #2a4a14;
+  padding: 12px 18px;
+  font-size: 14px;
+}
+
+/* ---- Calendar (flatpickr) ---- */
+.flatpickr-calendar { border-radius: 14px; box-shadow: 0 10px 30px rgba(20, 45, 10, 0.18); }
+.flatpickr-day.selected, .flatpickr-day.selected:hover { background: var(--oxfam-green); border-color: var(--oxfam-green); }
+.flatpickr-day.today { border-color: var(--oxfam-green); }
+.flatpickr-day:hover { background: var(--soft-green); border-color: var(--soft-green); }
+
+/* ---- Small screens ---- */
+@media (max-width: 600px) {
+  .wrap { padding-left: 10px; padding-right: 10px; }
+  .card { padding: 16px 14px; border-radius: 12px; }
+  header { padding: 14px 16px; }
+  nav.tabs a.tab { padding: 12px 14px; font-size: 13px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; }
+}
