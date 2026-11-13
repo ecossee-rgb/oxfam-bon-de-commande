@@ -139,6 +139,7 @@
   .textile-note .textile-note-text .nl { font-weight: 400; color: #3f5a2e; margin-top: 2px; }
   .textile-note .textile-note-text a { color: var(--oxfam-dark); text-decoration: underline; }
   /* One-line pointer to the Odoo webshop, shown above the promo note: bolder/larger than body text but lighter than the note itself. */
+  .holiday-note { font-size: 13px; margin: 8px 0 4px; padding: 9px 12px; background: #fffaeb; border: 1px solid #f0dfaa; border-radius: 10px; color: #5b4a12; }
   .webshop-line { margin: 6px 0 10px; font-size: 15px; font-weight: 700; }
   .webshop-line a { color: var(--oxfam-green); text-decoration: underline; }
   .webshop-line a:hover { color: var(--oxfam-dark); }
@@ -222,6 +223,7 @@
         <label id="lblDeliveryDate">Date de livraison / Leveringsdatum</label>
         <input type="text" id="deliveryDate" placeholder="jj/mm/aaaa" autocomplete="off">
         <p class="hint" id="deliveryDateHint"></p>
+        <div class="holiday-note" id="deliveryHolidayNote" style="display:none;"></div>
       </div>
     </div>
     <p class="hint" id="hintTabsAdapt">Les onglets ci-dessous s'adaptent automatiquement &agrave; votre magasin, comme dans le fichier Excel d'origine. / De onderstaande tabbladen passen zich automatisch aan uw winkel aan, net als in het oorspronkelijke Excel-bestand.</p>
@@ -609,8 +611,43 @@ function deliveryDateErrorMessage(store) {
 }
 const deliveryDateInput = document.getElementById('deliveryDate');
 const deliveryDateHint = document.getElementById('deliveryDateHint');
+// Heads-up for shops: Belgian public holidays coming up in the next two weeks
+// (Mon-Fri only - weekend holidays change nothing) are not counted as
+// working days, so they push back the first possible delivery date. Added
+// November 2026 after a shop was surprised that Friday 13/11 was no longer
+// selectable on the evening of 10/11 (11/11 being a holiday).
+function upcomingHolidays(daysAhead) {
+  const out = [];
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  for (let i = 0; i <= daysAhead; i++) {
+    const wd = d.getDay();
+    if (wd >= 1 && wd <= 5 && isBelgianHoliday(d)) out.push(new Date(d));
+    d.setDate(d.getDate() + 1);
+  }
+  return out;
+}
+function updateHolidayNote() {
+  const box = document.getElementById('deliveryHolidayNote');
+  if (!box) return;
+  const hols = upcomingHolidays(14);
+  if (!hols.length) { box.style.display = 'none'; box.textContent = ''; return; }
+  const store = storeSelect.value;
+  const minDays = minDeliveryDaysFor(store);
+  const dd = (x) => `${String(x.getDate()).padStart(2, '0')}/${String(x.getMonth() + 1).padStart(2, '0')}`;
+  const listFr = hols.map(x => `${DAY_NAMES_FR[x.getDay()]} ${dd(x)}`).join(', ');
+  const listNl = hols.map(x => `${DAY_NAMES_NL[x.getDay()]} ${dd(x)}`).join(', ');
+  const many = hols.length > 1;
+  box.textContent = bi(
+    `Attention, ${many ? 'jours fériés à venir' : 'jour férié à venir'} : ${listFr}. ${many ? 'Ils ne comptent' : 'Il ne compte'} pas dans le délai de ${minDays} jours ouvrables : la première date de livraison possible est repoussée d'autant. Pensez à commander plus tôt.`,
+    `Opgelet, ${many ? 'komende feestdagen' : 'komende feestdag'}: ${listNl}. ${many ? 'Ze tellen' : 'Hij telt'} niet mee in de termijn van ${minDays} werkdagen: de vroegst mogelijke leverdatum schuift evenveel op. Bestel dus tijdig.`
+  );
+  box.style.display = '';
+}
+
 function updateDeliveryDateHint() {
   updateLangForStore();
+  updateHolidayNote();
   if (!deliveryDateHint) return;
   const store = storeSelect.value;
   const humanDate = formatDateHuman(minDeliveryDateFor(store));
@@ -1038,6 +1075,7 @@ function deviceRow(prefix, idx, fields) {
       if (f.key === 'modele' && (prefix === 'laptop' || prefix === 'desktop')) {
         sel.addEventListener('change', () => updateOsOptionsForRow(prefix, idx));
       }
+      if (f.defaultValue) sel.value = f.defaultValue;
       td.appendChild(sel);
     } else if (f.type === 'number') {
       td.appendChild(el('input', {type:'number', min:'0', id:`${prefix}__${f.key}__${idx}`}));
@@ -1204,6 +1242,13 @@ function updateOsOptionsForRow(prefix, idx) {
   if (current && options.includes(current)) osSel.value = current;
 }
 
+// FR/NL language of the device (laptop, desktop, tablet rows), preselected
+// with the ordering shop's language: NL for Flanders, FR for Wallonia and for
+// Brussels (bilingual, FR by default - changed on request, November 2026).
+function langueCol() {
+  const l = typeof storeSelect !== 'undefined' && storeSelect ? langFor(storeSelect.value) : 'both';
+  return [{key:'langue', label:bi('Langue','Taal'), type:'select', options:['FR','NL'], defaultValue: l === 'nl' ? 'NL' : 'FR'}];
+}
 function remarqueCol() {
   return [{key:'remarque', label:bi('Remarque','Opmerking'), type:'text'}];
 }
@@ -1242,13 +1287,14 @@ INFO_CATEGORIES.forEach(cat => {
 });
 
 // French labels used for the Excel export headers (key -> header text).
-const INFO_COLUMN_LABELS_FR = { modele:'Modèle', os:'OS', clavier:'Clavier', remarque:'Remarque', commande:'Commandé' };
-const INFO_COLUMN_LABELS_NL = { modele:'Model', os:'OS', clavier:'Toetsenbord', remarque:'Opmerking', commande:'Besteld' };
+const INFO_COLUMN_LABELS_FR = { modele:'Modèle', os:'OS', clavier:'Clavier', langue:'Langue', remarque:'Remarque', commande:'Commandé' };
+const INFO_COLUMN_LABELS_NL = { modele:'Model', os:'OS', clavier:'Toetsenbord', langue:'Taal', remarque:'Opmerking', commande:'Besteld' };
 
 function infoColumns(cat) {
   const modelCol = cat.prefix === 'misc' ? [] : [{key:'modele', label:bi('Modèle','Model'), type:'select', options: odooStockOptions[cat.prefix]}];
   return modelCol
     .concat(cat.extraColumns())
+    .concat(['laptop', 'desktop', 'tablet'].includes(cat.prefix) ? langueCol() : [])
     .concat([{key:'commande', label:bi('Commandé','Besteld'), type:'number'}]);
 }
 
@@ -1460,7 +1506,9 @@ function collectDeviceRows(prefix, columns) {
     // as an empty field - it shouldn't appear in the recap even if a
     // model/OS was picked.
     if (qtyIdx !== -1 && parseFloat(rowVals[qtyIdx]) === 0) return;
-    if (rowVals.some(v => v && v.trim() !== '')) rows.push(rowVals);
+    // The language select is preselected with the shop's language, so on its
+    // own it must not make an otherwise blank row count as filled in.
+    if (rowVals.some((v, i) => columns[i].key !== 'langue' && v && v.trim() !== '')) rows.push(rowVals);
   });
   return rows;
 }
