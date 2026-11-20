@@ -395,7 +395,7 @@ function renderOrdersTable(orders, allLinesForScope) {
         <td>${escapeHtml(o.store_name)}</td>
         <td>${escapeHtml(o.delivery_date)}</td>
         <td>${o.created_at ? new Date(o.created_at).toLocaleString('fr-BE') : ''}</td>
-        <td><span class="details-toggle" data-target="${rowId}">Détails / Details (${lines.length})</span></td>
+        <td><span class="details-toggle" data-target="${escapeHtml(rowId)}">Détails / Details (${lines.length})</span></td>
         <td>
           ${pickingPill(o)}
           ${o.picking_completed_at ? `<div style="font-size:11px; color:#666; margin-top:3px;">${escapeHtml(o.picked_by || '')}</div>` : ''}
@@ -404,12 +404,12 @@ function renderOrdersTable(orders, allLinesForScope) {
           <a href="dashboard.html" class="action-link">Voir la commande compl&egrave;te / Volledige bestelling bekijken</a>
         </td>
       </tr>
-      <tr class="details-row" id="${rowId}" style="display:none;">
+      <tr class="details-row" id="${escapeHtml(rowId)}" style="display:none;">
         <td colspan="6">
           <table class="lines-table">
             <thead><tr><th>Sous-catégorie / Subcategorie</th><th>Article (FR)</th><th>Article (NL)</th><th>Commandé / Besteld</th><th>Pr&eacute;lev&eacute; / Opgehaald</th></tr></thead>
             <tbody>
-              ${lines.map(l => `<tr><td>${escapeHtml(l.category)}</td><td>${escapeHtml(l.article_fr)}${l.source === 'push' ? ' <strong>[PUSH]</strong>' : ''}</td><td>${escapeHtml(l.article_nl)}</td><td>${l.source === 'push' ? '&mdash;' : l.quantity}</td><td>${l.quantity_picked !== null && l.quantity_picked !== undefined ? l.quantity_picked : '-'}</td></tr>`).join('')}
+              ${lines.map(l => `<tr><td>${escapeHtml(l.category)}</td><td>${escapeHtml(l.article_fr)}${l.source === 'push' ? ' <strong>[PUSH]</strong>' : ''}</td><td>${escapeHtml(l.article_nl)}</td><td>${l.source === 'push' ? '&mdash;' : escapeHtml(l.quantity)}</td><td>${l.quantity_picked !== null && l.quantity_picked !== undefined ? escapeHtml(l.quantity_picked) : '-'}</td></tr>`).join('')}
             </tbody>
           </table>
         </td>

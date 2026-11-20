@@ -373,6 +373,11 @@ function makeSectionClickHandler(category, card, tableBody, nameInput, btn) {
       return { id: tr.getAttribute('data-line-id'), quantity_picked: val };
     });
 
+    if (lines.some(line => currentLines.find(l => l.id === line.id)?.source === 'push' && !(line.quantity_picked > 0))) {
+      toast('Indiquez une quantité supérieure à 0 pour les ajouts. / Geef een aantal groter dan 0 op voor de toevoegingen.');
+      return;
+    }
+
     btn.disabled = true;
     toast('Enregistrement en cours... / Bezig met opslaan...');
 
@@ -383,6 +388,11 @@ function makeSectionClickHandler(category, card, tableBody, nameInput, btn) {
         body: JSON.stringify({ orderId, pickedBy: name, lines })
       });
       const result = await resp.json();
+      if (resp.status === 409) {
+        toast('Commande déjà vérifiée. / Bestelling al geverifieerd.');
+        await loadOrder();
+        return;
+      }
       if (!resp.ok) throw new Error(result.error || ('submit-picking failed: ' + resp.status));
 
       // reflect locally so the progress banner + lock state update without
@@ -429,22 +439,8 @@ function unlockSection(card, tableBody, nameInput, btn) {
   renderProgressBanner();
 }
 
-// The "Logistique" section - only the two return-container fields shown
-// here (book boxes, yellow waste bins), per Manu: chariots/bacs IT/sacs
-// monnaie are not relevant to this preparation screen and were removed
-// (October 2026). The order form (index.html) still collects all five -
-// this section just doesn't surface the other three for the warehouse to
-// confirm/adjust. These live on the order row directly (not order_lines),
-// so this section works independently of whatever item categories the
-// order has (or doesn't have) and submits via its own endpoint,
-// /api/submit-logistics - see oxfam-password-gate-worker.js.
-//
-// Each field has two columns, same split as the item-line sections:
-// "Commandé" (orderKey, what the shop asked for - this endpoint never
-// touches it) and "Préparé" (pickedKey, what the warehouse actually
-// prepared - a separate *_picked column, added by
-// logistics-picked-columns-migration.sql, so the original request stays
-// visible after this section is confirmed).
+// The ordered and prepared logistics values live in separate columns on
+// the order, including for orders with no article lines.
 const LOGISTICS_FIELDS = [
   { type: 'choice', orderKey: 'want_delivery', pickedKey: 'want_delivery_picked', label: "Je veux une livraison / Ik wil een levering" },
   { type: 'choice', orderKey: 'want_transfer', pickedKey: 'want_transfer_picked', label: "Je veux un transfert / Ik wil een transfert" },
@@ -536,7 +532,7 @@ function renderLogisticsSection(order) {
   const inputs = [];
   LOGISTICS_FIELDS.forEach(f => {
     const orderedVal = order[f.orderKey];
-    const pickedRaw = (order[f.pickedKey] !== null && order[f.pickedKey] !== undefined) ? order[f.pickedKey] : orderedVal;
+    const pickedRaw = isDone && Object.hasOwn(order, f.pickedKey) ? order[f.pickedKey] : orderedVal;
 
     const tr = el('tr');
     tr.appendChild(el('td', { class: 'article-logistics', text: f.label }));
@@ -550,7 +546,7 @@ function renderLogisticsSection(order) {
       [['', '-'], ['oui', 'Oui / Ja'], ['non', 'Non / Neen']].forEach(([v, t]) => input.appendChild(el('option', { value: v, text: t })));
       input.value = logisticsControlValue(f, pickedRaw);
     }
-    if (isDone) input.disabled = true;
+    if (isDone || order.verified_at) input.disabled = true;
     const refresh = () => tr.classList.toggle('diff-row', logisticsDiffers(f, orderedVal, input));
     input.addEventListener(f.type === 'number' ? 'input' : 'change', refresh);
     input._field = f;
@@ -579,7 +575,7 @@ function renderLogisticsSection(order) {
     el('input', { type: 'text', placeholder: 'Votre nom / Uw naam', value: order.logistics_prepared_by || '' })
   ]);
   const nameInput = nameField.querySelector('input');
-  if (isDone) nameInput.disabled = true;
+  if (isDone || order.verified_at) nameInput.disabled = true;
   footer.appendChild(nameField);
 
   const btn = el('button', {
@@ -609,6 +605,11 @@ function renderLogisticsSection(order) {
         body: JSON.stringify({ orderId, preparedBy: name, values })
       });
       const result = await resp.json();
+      if (resp.status === 409) {
+        toast('Commande déjà vérifiée. / Bestelling al geverifieerd.');
+        await loadOrder();
+        return;
+      }
       if (!resp.ok) throw new Error(result.error || ('submit-logistics failed: ' + resp.status));
 
       // values is keyed by orderKey (nb_chariots, ...) to match what the
@@ -626,7 +627,7 @@ function renderLogisticsSection(order) {
     }
     btn.disabled = false;
   });
-  footer.appendChild(btn);
+  if (!order.verified_at) footer.appendChild(btn);
   card.appendChild(footer);
 
   container.appendChild(card);
@@ -643,7 +644,7 @@ function renderLines(lines) {
     return;
   }
 
-  const byCategory = {};
+  const byCategory = Object.create(null);
   lines.forEach(l => {
     (byCategory[l.category] = byCategory[l.category] || []).push(l);
   });
@@ -683,7 +684,7 @@ function renderLines(lines) {
       const tdPicked = el('td', { class: 'num' });
       const initial = (line.quantity_picked !== null && line.quantity_picked !== undefined) ? line.quantity_picked : line.quantity;
       const input = el('input', { type: 'number', min: '0', value: String(initial) });
-      if (isDone) input.disabled = true;
+      if (isDone || currentOrder.verified_at) input.disabled = true;
       if (!isPush) input.addEventListener('input', () => updateDiffHighlight(tr, input, line.quantity));
       tdPicked.appendChild(input);
       tr.appendChild(tdPicked);
@@ -699,7 +700,7 @@ function renderLines(lines) {
       el('input', { type: 'text', placeholder: 'Votre nom / Uw naam', value: existingPickedBy })
     ]);
     const nameInput = nameField.querySelector('input');
-    if (isDone) nameInput.disabled = true;
+    if (isDone || currentOrder.verified_at) nameInput.disabled = true;
     footer.appendChild(nameField);
 
     const btn = el('button', {
@@ -708,7 +709,7 @@ function renderLines(lines) {
       text: isDone ? 'Modifier cette section / Deze sectie wijzigen' : 'Valider cette section / Deze sectie bevestigen'
     });
     btn.addEventListener('click', makeSectionClickHandler(category, card, tbody, nameInput, btn));
-    footer.appendChild(btn);
+    if (!currentOrder.verified_at) footer.appendChild(btn);
     card.appendChild(footer);
 
     container.appendChild(card);

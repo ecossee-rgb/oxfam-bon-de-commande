@@ -581,7 +581,42 @@ function isWeekend(dateStr) {
   const d2 = d;
   return !isWorkingDay(d2); // weekend OR Belgian public holiday
 }
+// Exceptional delivery calendar (November 2026): a few shops follow a
+// different, alternating schedule for a limited period. For these shops,
+// up to and including DELIVERY_OVERRIDES_THROUGH, ONLY the dates listed
+// here can be chosen (the usual weekly round is ignored); after that date
+// the usual round applies again. The list was given as: 19/11 Mechelen + LKP
+// + Mons Textile; 20/11 Pop Up Alost; 26/11 Mons Textile; 27/11 Louvain +
+// LKP; 03/12 Mechelen + LKP + Mons Textile; 04/12 Pop Up Alost.
+// Name mapping used: LKP = Shop Antwerpen Lange Koertpoortstraat, Pop Up
+// Alost = Shop Aalst Lange Zoutstraat, Louvain = Shop Leuven Diestsestraat.
+const DELIVERY_OVERRIDES_THROUGH = '2026-12-04';
+const DELIVERY_DATE_OVERRIDES = {
+  'Shop Mechelen': ['2026-11-19', '2026-12-03'],
+  'Shop Antwerpen Lange Koertpoortstraat': ['2026-11-19', '2026-11-27', '2026-12-03'],
+  'Shop Mons Textile': ['2026-11-19', '2026-11-26', '2026-12-03'],
+  'Shop Aalst Lange Zoutstraat': ['2026-11-20', '2026-12-04'],
+  'Shop Leuven Diestsestraat': ['2026-11-27'],
+};
+function hasDeliveryOverride(store) {
+  return !!(store && DELIVERY_DATE_OVERRIDES[store]);
+}
+// Override dates still selectable (not before the shop's earliest date).
+function upcomingOverrideDates(store) {
+  const min = minDeliveryDateIsoFor(store);
+  return (DELIVERY_DATE_OVERRIDES[store] || []).filter(d => d >= min);
+}
+function overrideDateLabels(dates) {
+  const fmt = (iso, names) => {
+    const d = new Date(iso + 'T00:00:00');
+    return `${names[d.getDay()]} ${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+  };
+  return { fr: dates.map(d => fmt(d, DAY_NAMES_FR)).join(', '), nl: dates.map(d => fmt(d, DAY_NAMES_NL)).join(', ') };
+}
 function isAllowedDeliveryWeekday(dateStr, store) {
+  if (hasDeliveryOverride(store) && dateStr <= DELIVERY_OVERRIDES_THROUGH) {
+    return DELIVERY_DATE_OVERRIDES[store].includes(dateStr);
+  }
   const days = getAllowedWeekdays(store);
   if (!days) return true; // no known round for this shop - don't block
   const d = new Date(dateStr + 'T00:00:00');
@@ -595,6 +630,17 @@ function deliveryDateErrorMessage(store) {
   const lang = langFor(store);
   const minDays = minDeliveryDaysFor(store);
   const minDate = minDeliveryDateFor(store);
+  if (hasDeliveryOverride(store) && formatDateISO(new Date()) <= DELIVERY_OVERRIDES_THROUGH) {
+    const up = upcomingOverrideDates(store);
+    const L = overrideDateLabels(up);
+    const through = formatDateHuman(new Date(DELIVERY_OVERRIDES_THROUGH + 'T00:00:00'));
+    const usual = days ? formatAllowedDays(days) : { fr: '', nl: '' };
+    const frT = `Calendrier de livraison exceptionnel pour votre magasin jusqu'au ${through} : ${up.length ? 'livraisons les ' + L.fr : 'aucune livraison prévue'}. Ensuite, tournée habituelle (${usual.fr}).`;
+    const nlT = `Uitzonderlijke leverkalender voor uw winkel tot ${through}: ${up.length ? 'leveringen op ' + L.nl : 'geen leveringen gepland'}. Daarna de gewone ronde (${usual.nl}).`;
+    if (lang === 'fr') return frT;
+    if (lang === 'nl') return nlT;
+    return `${frT} / ${nlT}`;
+  }
   if (days) {
     const { fr, nl } = formatAllowedDays(days);
     const frText = `La date de livraison doit correspondre au jour de tournée de votre magasin (${fr}), et être au moins ${minDays} jours ouvrables (hors jours fériés) après aujourd'hui (à partir du ${formatDateHuman(minDate)}).`;
@@ -653,7 +699,16 @@ function updateDeliveryDateHint() {
   const humanDate = formatDateHuman(minDeliveryDateFor(store));
   const minDays = minDeliveryDaysFor(store);
   const days = store ? getAllowedWeekdays(store) : null;
-  if (days) {
+  if (hasDeliveryOverride(store) && formatDateISO(new Date()) <= DELIVERY_OVERRIDES_THROUGH) {
+    const up = upcomingOverrideDates(store);
+    const L = overrideDateLabels(up);
+    const through = formatDateHuman(new Date(DELIVERY_OVERRIDES_THROUGH + 'T00:00:00'));
+    const usual = days ? formatAllowedDays(days) : { fr: '', nl: '' };
+    deliveryDateHint.textContent = bi(
+      `Calendrier exceptionnel pour votre magasin jusqu'au ${through} : ${up.length ? 'livraisons les ' + L.fr : 'aucune livraison prévue'}. Ensuite, tournée habituelle (${usual.fr}). Les autres jours sont grisés dans le calendrier.`,
+      `Uitzonderlijke kalender voor uw winkel tot ${through}: ${up.length ? 'leveringen op ' + L.nl : 'geen leveringen gepland'}. Daarna de gewone ronde (${usual.nl}). De andere dagen zijn grijs in de kalender.`
+    );
+  } else if (days) {
     const { fr, nl } = formatAllowedDays(days);
     deliveryDateHint.textContent = bi(
       `Votre magasin est livré le : ${fr} (à partir du ${humanDate} au plus tôt). Les autres jours (et les jours fériés) sont grisés dans le calendrier.`,
@@ -674,6 +729,9 @@ function buildDeliveryDateDisableFn(store) {
   return function (date) {
     const wd = date.getDay();
     if (wd === 0 || wd === 6 || isBelgianHoliday(date)) return true;
+    if (hasDeliveryOverride(store) && formatDateISO(date) <= DELIVERY_OVERRIDES_THROUGH) {
+      return !DELIVERY_DATE_OVERRIDES[store].includes(formatDateISO(date));
+    }
     if (days && !days.includes(wd)) return true;
     return false;
   };
@@ -1933,7 +1991,7 @@ function collectFormSnapshot() {
   return { fields, radioGroups, deviceRowCounts };
 }
 
-async function logOrderToSupabase() {
+function buildPendingRegistration() {
   const store = storeSelect.value;
   const dateVal = document.getElementById('deliveryDate').value;
   const radioVal = (name) => {
@@ -1960,29 +2018,15 @@ async function logOrderToSupabase() {
 
   const lines = collectAllLineItems();
 
-  // New order submission also goes through the Worker (/api/orders), not
-  // directly to Supabase - the browser no longer holds any Supabase key at
-  // all. The Worker validates the payload server-side and writes with the
-  // service_role key.
-  //
-  // October 2026 (after Wilrijk and Vilvoorde both reported "email sent but
-  // registration failed"): the order gets its UUID here, in the browser, and
-  // the whole payload is kept as a "pending registration" until the Worker
-  // confirms it. That makes the call safely retryable - the Worker treats a
-  // repeated clientOrderId as the same order, never a second one - so we
-  // retry automatically on network errors/5xx/429, and if every attempt
-  // fails the shop gets a "register again" button instead of having to
-  // resubmit (which would resend all the emails). See registerNewOrder().
-  const pending = {
+  return {
     clientOrderId: newClientOrderId(),
     order: orderPayload,
     lines,
     store,
     dateVal,
-    savedAt: Date.now()
+    savedAt: Date.now(),
+    emailAttempted: null
   };
-  savePendingRegistration(pending);
-  await registerNewOrder(pending);
 }
 
 // ---- Resilient registration of a new order (October 2026) ----------------
@@ -2005,9 +2049,11 @@ function savePendingRegistration(p) {
   window.__pendingRegistration = p;
   try { localStorage.setItem(PENDING_REG_KEY, JSON.stringify(p)); } catch (e) { /* storage blocked: in-memory copy still works for this page view */ }
 }
-function clearPendingRegistration() {
-  window.__pendingRegistration = null;
-  try { localStorage.removeItem(PENDING_REG_KEY); } catch (e) { /* ignore */ }
+function clearPendingRegistration(pending) {
+  if (window.__pendingRegistration?.clientOrderId === pending.clientOrderId) window.__pendingRegistration = null;
+  try {
+    if (loadPendingRegistration()?.clientOrderId === pending.clientOrderId) localStorage.removeItem(PENDING_REG_KEY);
+  } catch (e) { /* ignore */ }
 }
 function loadPendingRegistration() {
   try {
@@ -2047,7 +2093,6 @@ async function registerNewOrder(pending) {
     if (delay) await new Promise(r => setTimeout(r, delay));
     try {
       await postNewOrderOnce(pending);
-      clearPendingRegistration();
       return;
     } catch (e) {
       lastErr = e;
@@ -2057,9 +2102,7 @@ async function registerNewOrder(pending) {
   throw lastErr;
 }
 
-// Persistent banner shown when the email went out but the order isn't
-// registered in the tracking yet. Retries ONLY the registration - no email is
-// resent. Also shown on page load if an earlier session left one pending.
+// A pending order can be registered again without calling FormSubmit.
 function showRegisterRetryBanner(pending) {
   const old = document.getElementById('registerRetryBox');
   if (old) old.remove();
@@ -2067,9 +2110,13 @@ function showRegisterRetryBanner(pending) {
   box.id = 'registerRetryBox';
   box.style.cssText = 'margin:14px 0;padding:14px 16px;border:2px solid #f0c674;background:#fff3cd;border-radius:10px;font-size:14px;line-height:1.45;';
   const msg = document.createElement('div');
-  msg.textContent = bi(
-    `Votre commande (${pending.store}, livraison ${pending.dateVal}) a bien été envoyée par email, mais elle n'est pas encore enregistrée dans le suivi des commandes. Ne la renvoyez pas : cliquez sur le bouton ci-dessous, aucun nouvel email ne sera envoyé.`,
-    `Uw bestelling (${pending.store}, levering ${pending.dateVal}) is per e-mail verzonden, maar nog niet geregistreerd in de bestelopvolging. Verstuur ze niet opnieuw: klik op de knop hieronder, er wordt geen nieuwe e-mail verstuurd.`
+  const emailWasSubmitted = pending.emailAttempted === true || pending.emailAttempted === undefined;
+  msg.textContent = emailWasSubmitted ? bi(
+    `Votre commande (${pending.store}, livraison ${pending.dateVal}) a été envoyée par email, mais son enregistrement reste à confirmer. Le bouton ci-dessous réessaie uniquement l'enregistrement.`,
+    `Uw bestelling (${pending.store}, levering ${pending.dateVal}) is per e-mail verzonden, maar de registratie moet nog worden bevestigd. Met de knop hieronder probeert u alleen de registratie opnieuw.`
+  ) : bi(
+    `L'enregistrement de votre commande (${pending.store}, livraison ${pending.dateVal}) reste à confirmer. Réessayez l'enregistrement et vérifiez l'envoi de l'email avec la logistique.`,
+    `De registratie van uw bestelling (${pending.store}, levering ${pending.dateVal}) moet nog worden bevestigd. Probeer de registratie opnieuw en controleer de verzending van de e-mail bij logistiek.`
   );
   const btn = document.createElement('button');
   btn.type = 'button';
@@ -2079,19 +2126,29 @@ function showRegisterRetryBanner(pending) {
     btn.disabled = true;
     try {
       await registerNewOrder(pending);
-      window.location.href = 'dashboard.html?sent=1';
+      clearPendingRegistration(pending);
+      if (emailWasSubmitted) {
+        window.location.href = 'dashboard.html?sent=1';
+        return;
+      }
+      msg.textContent = bi(
+        "Commande enregistrée. Vérifiez l'envoi de l'email avec la logistique.",
+        'Bestelling geregistreerd. Controleer de verzending van de e-mail bij logistiek.'
+      );
+      btn.remove();
     } catch (e) {
       console.error(e);
       btn.disabled = false;
       toast(bi(
-        "L'enregistrement a encore échoué. Vérifiez votre connexion et réessayez dans un instant ; si cela persiste, prévenez la logistique (le fichier Excel est déjà chez eux par email).",
-        'De registratie is opnieuw mislukt. Controleer uw verbinding en probeer zo meteen opnieuw; blijft het mislukken, verwittig dan de logistiek (het Excel-bestand hebben zij al per e-mail ontvangen).'
+        "L'enregistrement a encore échoué. Vérifiez votre connexion et réessayez dans un instant. Si cela persiste, prévenez la logistique.",
+        'De registratie is opnieuw mislukt. Controleer uw verbinding en probeer zo meteen opnieuw. Blijft het mislukken, verwittig dan de logistiek.'
       ));
     }
   });
   box.appendChild(msg);
   box.appendChild(btn);
   const anchor = document.getElementById('btnSend');
+  anchor.disabled = true;
   anchor.parentNode.insertBefore(box, anchor);
   box.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
@@ -2198,6 +2255,11 @@ function sendEmailWithAttachment(store, dateVal, opts) {
 }
 
 document.getElementById('btnSend').addEventListener('click', async () => {
+  const existing = window.__pendingRegistration || loadPendingRegistration();
+  if (existing) {
+    showRegisterRetryBanner(existing);
+    return;
+  }
   const store = storeSelect.value;
   if (!store) { toast(bi("Merci de choisir votre magasin avant d'envoyer.", 'Gelieve uw winkel te kiezen voordat u verstuurt.')); return; }
   const dateVal = document.getElementById('deliveryDate').value;
@@ -2227,8 +2289,9 @@ document.getElementById('btnSend').addEventListener('click', async () => {
     return;
   }
 
-  const sendBtn = document.getElementById('btnSend');
-  sendBtn.disabled = true;
+  const pending = buildPendingRegistration();
+  savePendingRegistration(pending);
+  document.getElementById('btnSend').disabled = true;
   toast(bi('Envoi en cours...', 'Bezig met verzenden...'));
 
   // If this order has informatique quantities, also send a second email
@@ -2244,7 +2307,7 @@ document.getElementById('btnSend').addEventListener('click', async () => {
 
   const sendJobs = [
     { key: 'email', promise: sendEmailWithAttachment(store, dateVal) },
-    { key: 'db', promise: logOrderToSupabase() }
+    { key: 'db', promise: registerNewOrder(pending) }
   ];
   if (sendInfoEmail) {
     sendJobs.push({
@@ -2300,37 +2363,24 @@ document.getElementById('btnSend').addEventListener('click', async () => {
     if (sendShopCopy && !shopEmailAttempted) console.error(outcomes.shopEmail.reason);
   }
 
+  logSecondaryFailures();
+  if (dbOk) clearPendingRegistration(pending);
   if (emailAttempted && dbOk) {
-    logSecondaryFailures();
-    // Full success: redirect to the tracking dashboard with a persistent
-    // confirmation banner instead of a toast that disappears after a few
-    // seconds while the form stays on screen looking untouched - shops
-    // reported that ambiguity made it look like sending had silently failed.
     window.location.href = 'dashboard.html?sent=1';
     return;
-  } else if (emailAttempted && !dbOk) {
-    console.error(outcomes.db.reason);
-    logSecondaryFailures();
-    // The emails are out, so resubmitting the form would only duplicate them.
-    // Keep the send button disabled and offer a registration-only retry
-    // instead (the pending order is already saved by logOrderToSupabase).
-    toast(bi("Email envoyé, mais l'enregistrement dans le suivi des commandes n'a pas abouti. Ne renvoyez pas la commande : utilisez le bouton « Réessayer l'enregistrement ».", "E-mail verzonden, maar de registratie in de bestelopvolging is niet gelukt. Verstuur de bestelling niet opnieuw: gebruik de knop « Registratie opnieuw proberen »."));
-    if (window.__pendingRegistration) {
-      showRegisterRetryBanner(window.__pendingRegistration);
-      return;
-    }
-  } else if (!emailAttempted && dbOk) {
-    console.error(outcomes.email.reason);
-    toast(bi("Enregistré dans le suivi des commandes, mais l'envoi de l'email a échoué. Réessayez, ou téléchargez une copie et envoyez-la manuellement.", "Geregistreerd in de bestelopvolging, maar het verzenden van de e-mail is mislukt. Probeer opnieuw, of download een kopie en verstuur deze handmatig.") + infoSuffix() + shopSuffix());
-  } else {
-    console.error(outcomes.email.reason, outcomes.db.reason);
-    // Nothing was emailed, so the shop will resubmit the whole form: drop the
-    // pending registration so it isn't offered later as a duplicate.
-    clearPendingRegistration();
-    toast(bi("Échec de l'envoi et de l'enregistrement. Réessayez, ou téléchargez une copie et envoyez-la manuellement.", "Verzenden en registreren mislukt. Probeer opnieuw, of download een kopie en verstuur deze handmatig.") + infoSuffix() + shopSuffix());
   }
-
-  sendBtn.disabled = false;
+  if (!emailAttempted) console.error(outcomes.email.reason);
+  if (!dbOk) {
+    console.error(outcomes.db.reason);
+    pending.emailAttempted = emailAttempted;
+    savePendingRegistration(pending);
+    showRegisterRetryBanner(pending);
+    return;
+  }
+  toast(bi(
+    "Commande enregistrée. L'envoi de l'email a échoué. Téléchargez une copie et envoyez-la manuellement.",
+    'Bestelling geregistreerd. Het verzenden van de e-mail is mislukt. Download een kopie en verstuur die handmatig.'
+  ) + infoSuffix() + shopSuffix());
 });
 
 </script>

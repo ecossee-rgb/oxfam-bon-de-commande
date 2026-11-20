@@ -487,16 +487,12 @@ async function handleVerifyCheck(checkbox) {
     const order = allOrders.find(o => o.id === orderId);
     if (order) { order.verified_at = new Date().toISOString(); order.verified_by = trimmed; }
 
-    let msg;
-    if (result.diffCount > 0) {
-      msg = result.emailSent
-        ? `Vérifié. ${result.diffCount} écart(s) détecté(s), email envoyé au magasin.`
-        : `Vérifié. ${result.diffCount} écart(s), mais l'email a échoué (${result.emailError || 'raison inconnue'}).`;
-    } else {
-      msg = 'Vérifié. Aucun écart, pas d\'email envoyé.';
-    }
-    if (result.unpickedCount > 0) {
-      msg += ` Attention : ${result.unpickedCount} ligne(s) pas encore préparée(s).`;
+    const { diffCount, pushCount, unpickedCount } = result;
+    let msg = diffCount || pushCount
+      ? `Vérifié. ${diffCount} écart(s), ${pushCount} ajout(s) du centre. Le magasin sera prévenu dans le récapitulatif quotidien. / Geverifieerd. ${diffCount} afwijking(en), ${pushCount} toevoeging(en) van het centrum. De winkel krijgt bericht in het dagelijkse overzicht.`
+      : "Vérifié. Aucun écart ni ajout à signaler. / Geverifieerd. Geen afwijkingen of toevoegingen te melden.";
+    if (unpickedCount > 0) {
+      msg += ` Attention, ${unpickedCount} ligne(s) pas encore préparée(s). / Let op, ${unpickedCount} regel(s) nog niet voorbereid.`;
     }
     toast(msg);
     renderAll();
@@ -541,7 +537,7 @@ function renderOrdersTable(orders, allLinesForScope) {
         <td>${pill(o.want_transfer)}</td>
         <td>${pill(o.want_return)}</td>
         <td>${escapeHtml(o.remarques_logistique)}</td>
-        <td><span class="details-toggle" data-target="${rowId}">Détails / Details (${lines.length})</span></td>
+        <td><span class="details-toggle" data-target="${escapeHtml(rowId)}">Détails / Details (${lines.length})</span></td>
         <td>
           ${pickingPill(o)}
           ${o.picking_completed_at ? `<div style="font-size:11px; color:#666; margin-top:3px;">${escapeHtml(o.picked_by || '')}</div>` : ''}
@@ -551,23 +547,23 @@ function renderOrdersTable(orders, allLinesForScope) {
         </td>
         <td>${verifyCellHtml(o, lines)}</td>
       </tr>
-      <tr class="details-row" id="${rowId}" style="display:none;">
+      <tr class="details-row" id="${escapeHtml(rowId)}" style="display:none;">
         <td colspan="11">
           ${lines.length ? `
             <table class="lines-table">
               <thead><tr><th>Catégorie / Categorie</th><th>Article (FR)</th><th>Article (NL)</th><th>Quantité / Aantal</th><th>Pr&eacute;lev&eacute; / Opgehaald</th></tr></thead>
               <tbody>
-                ${lines.map(l => `<tr><td>${escapeHtml(l.category)}</td><td>${escapeHtml(l.article_fr)}</td><td>${escapeHtml(l.article_nl)}</td><td>${l.quantity}</td><td>${l.quantity_picked !== null && l.quantity_picked !== undefined ? l.quantity_picked : '-'}</td></tr>`).join('')}
+                ${lines.map(l => `<tr><td>${escapeHtml(l.category)}</td><td>${escapeHtml(l.article_fr)}${l.source === 'push' ? ' <strong>[PUSH]</strong>' : ''}</td><td>${escapeHtml(l.article_nl)}</td><td>${l.source === 'push' ? '&mdash;' : escapeHtml(l.quantity)}</td><td>${l.quantity_picked !== null && l.quantity_picked !== undefined ? escapeHtml(l.quantity_picked) : '-'}</td></tr>`).join('')}
               </tbody>
             </table>
           ` : "<em>Aucune ligne d'article (commande logistique uniquement). / Geen artikelregel (enkel logistieke bestelling).</em>"}
           ${o.nb_chariots || o.nb_bacs_it || o.nb_sacs_monnaie || o.nb_cartons_livres || o.nb_bacs_jaunes ? `
             <div style="margin-top:6px; font-size:12px; color:#555;">
-              ${o.nb_chariots ? `Chariots retour / Rolkarren terugkeer: ${o.nb_chariots}. ` : ''}
-              ${o.nb_bacs_it ? `Bacs réparations IT / Bakken reparaties IT: ${o.nb_bacs_it}. ` : ''}
-              ${o.nb_sacs_monnaie ? `Sacs monnaie / Zakken kleingeld: ${o.nb_sacs_monnaie}. ` : ''}
-              ${o.nb_cartons_livres ? `Cartons livres / Kartonnen dozen boeken: ${o.nb_cartons_livres}. ` : ''}
-              ${o.nb_bacs_jaunes ? `Bacs jaunes / Gele bakken: ${o.nb_bacs_jaunes}.` : ''}
+              ${o.nb_chariots ? `Chariots retour / Rolkarren terugkeer: ${escapeHtml(o.nb_chariots)}. ` : ''}
+              ${o.nb_bacs_it ? `Bacs réparations IT / Bakken reparaties IT: ${escapeHtml(o.nb_bacs_it)}. ` : ''}
+              ${o.nb_sacs_monnaie ? `Sacs monnaie / Zakken kleingeld: ${escapeHtml(o.nb_sacs_monnaie)}. ` : ''}
+              ${o.nb_cartons_livres ? `Cartons livres / Kartonnen dozen boeken: ${escapeHtml(o.nb_cartons_livres)}. ` : ''}
+              ${o.nb_bacs_jaunes ? `Bacs jaunes / Gele bakken: ${escapeHtml(o.nb_bacs_jaunes)}.` : ''}
             </div>
           ` : ''}
         </td>
