@@ -1022,9 +1022,9 @@ function buildQtyTable(sectionKey, groups, opts) {
     if (showColors) {
       // Colored items are ordered per Yunus price category, so each item
       // gets 3 separate quantity fields instead of one combined field.
-      headerCells.push(el('th', {class:'color-th', html:`<span class="color-dot red"></span>${bi('Rouge','Rood')}`}));
-      headerCells.push(el('th', {class:'color-th', html:`<span class="color-dot yellow"></span>${bi('Jaune','Geel')}`}));
-      headerCells.push(el('th', {class:'color-th', html:`<span class="color-dot green"></span>${bi('Vert','Groen')}`}));
+      headerCells.push(el('th', {class:'color-th', html:`<span class="color-dot red"></span>${bi('Sacs rouges','Rode zakken')}`}));
+      headerCells.push(el('th', {class:'color-th', html:`<span class="color-dot yellow"></span>${bi('Sacs jaunes','Gele zakken')}`}));
+      headerCells.push(el('th', {class:'color-th', html:`<span class="color-dot green"></span>${bi('Sacs verts','Groene zakken')}`}));
     } else {
       headerCells.push(el('th', {text: bi('Commandé','Besteld')}));
     }
@@ -1110,8 +1110,8 @@ function buildTextileCard(key, def) {
     }
   }
   if (COLOR_CHECKBOX_SECTIONS.includes(key)) {
-    const legendFr = 'Rappel : indiquez la quantité commandée par catégorie <span class="dot-red">rouge</span><span class="dot-yellow">jaune</span><span class="dot-green">vert</span> Yunus pour les vêtements &amp; manteaux.';
-    const legendNl = 'Geef het bestelde aantal per Yunus-categorie <span class="dot-red">rood</span><span class="dot-yellow">geel</span><span class="dot-green">groen</span> op voor kleding &amp; jassen.';
+    const legendFr = 'Rappel : indiquez le <strong>nombre de sacs</strong> commandés par catégorie <span class="dot-red">rouge</span><span class="dot-yellow">jaune</span><span class="dot-green">vert</span> Yunus pour les vêtements &amp; manteaux.';
+    const legendNl = 'Geef het bestelde <strong>aantal zakken</strong> per Yunus-categorie <span class="dot-red">rood</span><span class="dot-yellow">geel</span><span class="dot-green">groen</span> op voor kleding &amp; jassen.';
     card.appendChild(el('div', {class:'legend', html: bi(legendFr, legendNl, `${legendFr} / ${legendNl}`)}));
   }
   card.appendChild(buildQtyTable(key, def.groups, {collapsible: key === 'economat'}));
@@ -1670,7 +1670,7 @@ function buildWorkbook() {
     const isColorSection = COLOR_CHECKBOX_SECTIONS.includes(prefix);
     const articleHeader = lang === 'both' ? ['Article (FR)', 'Article (NL)'] : [t('Article', 'Artikel')];
     const header = articleHeader.concat([t('Commandé', 'Besteld'), t('Livré (Yunus)', 'Geleverd (Yunus)', 'Livré / Geleverd (Yunus)')]);
-    if (isColorSection) header.push(t('Rouge','Rood'), t('Jaune','Geel'), t('Vert','Groen'));
+    if (isColorSection) header.push(t('Sacs rouges','Rode zakken'), t('Sacs jaunes','Gele zakken'), t('Sacs verts','Groene zakken'));
     const labels = SECTION_LABELS[prefix];
     const localizedTitle = labels ? t(labels.fr, labels.nl, headerTitle) : headerTitle;
 
