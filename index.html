@@ -581,30 +581,47 @@ function isWeekend(dateStr) {
   const d2 = d;
   return !isWorkingDay(d2); // weekend OR Belgian public holiday
 }
-// Exceptional delivery calendar (November 2026): a few shops follow a
-// different, alternating schedule for a limited period. For these shops,
-// up to and including DELIVERY_OVERRIDES_THROUGH, ONLY the dates listed
-// here can be chosen (the usual weekly round is ignored); after that date
-// the usual round applies again. The list was given as: 19/11 Mechelen + LKP
-// + Mons Textile; 20/11 Pop Up Alost; 26/11 Mons Textile; 27/11 Louvain +
-// LKP; 03/12 Mechelen + LKP + Mons Textile; 04/12 Pop Up Alost.
-// Name mapping used: LKP = Shop Antwerpen Lange Koertpoortstraat, Pop Up
-// Alost = Shop Aalst Lange Zoutstraat, Louvain = Shop Leuven Diestsestraat.
-const DELIVERY_OVERRIDES_THROUGH = '2026-12-04';
-const DELIVERY_DATE_OVERRIDES = {
-  'Shop Mechelen': ['2026-11-19', '2026-12-03'],
-  'Shop Antwerpen Lange Koertpoortstraat': ['2026-11-19', '2026-11-27', '2026-12-03'],
-  'Shop Mons Textile': ['2026-11-19', '2026-11-26', '2026-12-03'],
-  'Shop Aalst Lange Zoutstraat': ['2026-11-20', '2026-12-04'],
-  'Shop Leuven Diestsestraat': ['2026-11-27'],
+// Permanent delivery calendar: a few shops are delivered on an alternating
+// schedule (every other week) instead of the usual weekly round. For these
+// shops ONLY the dates produced by the rules below can be chosen; the usual
+// weekly round (DELIVERY_DAYS) is ignored for them. Each rule is a weekday
+// (0 = Sunday ... 6 = Saturday) plus an anchor date falling on that weekday:
+// the shop is delivered on that weekday every 14 days counted from the anchor.
+// Pattern given (Nov 2026): Mechelen Thu 19/11, 03/12, ...; LKP Thu 19/11,
+// 03/12, ... AND Fri 27/11, 11/12, ... (every week, alternating day);
+// Pop Up Alost (= Shop Aalst Lange Zoutstraat) Fri 20/11, 04/12, ...;
+// Louvain (= Shop Leuven Diestsestraat) Fri 27/11, 11/12, ... Mons Textile is
+// delivered every Thursday, i.e. it follows the usual weekly round.
+const DELIVERY_BIWEEKLY = {
+  'Shop Mechelen': [{ wd: 4, anchor: '2026-11-19' }],
+  'Shop Aalst Lange Zoutstraat': [{ wd: 5, anchor: '2026-11-20' }],
+  'Shop Leuven Diestsestraat': [{ wd: 5, anchor: '2026-11-27' }],
+  'Shop Antwerpen Lange Koertpoortstraat': [{ wd: 4, anchor: '2026-11-19' }, { wd: 5, anchor: '2026-11-27' }],
 };
 function hasDeliveryOverride(store) {
-  return !!(store && DELIVERY_DATE_OVERRIDES[store]);
+  return !!(store && DELIVERY_BIWEEKLY[store]);
 }
-// Override dates still selectable (not before the shop's earliest date).
+function matchesBiweekly(store, iso) {
+  const rules = DELIVERY_BIWEEKLY[store];
+  if (!rules) return false;
+  const p = iso.split('-').map(Number);
+  const t = Date.UTC(p[0], p[1] - 1, p[2]);
+  const wd = new Date(t).getUTCDay();
+  return rules.some(r => {
+    if (r.wd !== wd) return false;
+    const a = r.anchor.split('-').map(Number);
+    return Math.round((t - Date.UTC(a[0], a[1] - 1, a[2])) / 86400000) % 14 === 0;
+  });
+}
 function upcomingOverrideDates(store) {
   const min = minDeliveryDateIsoFor(store);
-  return (DELIVERY_DATE_OVERRIDES[store] || []).filter(d => d >= min);
+  const out = [];
+  const d = new Date(min + 'T00:00:00');
+  for (let i = 0; i < 120 && out.length < 6; i++, d.setDate(d.getDate() + 1)) {
+    const iso = formatDateISO(d);
+    if (matchesBiweekly(store, iso) && isWorkingDay(d)) out.push(iso);
+  }
+  return out;
 }
 function overrideDateLabels(dates) {
   const fmt = (iso, names) => {
@@ -614,8 +631,8 @@ function overrideDateLabels(dates) {
   return { fr: dates.map(d => fmt(d, DAY_NAMES_FR)).join(', '), nl: dates.map(d => fmt(d, DAY_NAMES_NL)).join(', ') };
 }
 function isAllowedDeliveryWeekday(dateStr, store) {
-  if (hasDeliveryOverride(store) && dateStr <= DELIVERY_OVERRIDES_THROUGH) {
-    return DELIVERY_DATE_OVERRIDES[store].includes(dateStr);
+  if (hasDeliveryOverride(store)) {
+    return matchesBiweekly(store, dateStr);
   }
   const days = getAllowedWeekdays(store);
   if (!days) return true; // no known round for this shop - don't block
@@ -630,13 +647,13 @@ function deliveryDateErrorMessage(store) {
   const lang = langFor(store);
   const minDays = minDeliveryDaysFor(store);
   const minDate = minDeliveryDateFor(store);
-  if (hasDeliveryOverride(store) && formatDateISO(new Date()) <= DELIVERY_OVERRIDES_THROUGH) {
+  if (hasDeliveryOverride(store)) {
     const up = upcomingOverrideDates(store);
     const L = overrideDateLabels(up);
-    const through = formatDateHuman(new Date(DELIVERY_OVERRIDES_THROUGH + 'T00:00:00'));
-    const usual = days ? formatAllowedDays(days) : { fr: '', nl: '' };
-    const frT = `Calendrier de livraison exceptionnel pour votre magasin jusqu'au ${through} : ${up.length ? 'livraisons les ' + L.fr : 'aucune livraison prévue'}. Ensuite, tournée habituelle (${usual.fr}).`;
-    const nlT = `Uitzonderlijke leverkalender voor uw winkel tot ${through}: ${up.length ? 'leveringen op ' + L.nl : 'geen leveringen gepland'}. Daarna de gewone ronde (${usual.nl}).`;
+    // (see DELIVERY_BIWEEKLY above)
+    // Permanent schedule (DELIVERY_BIWEEKLY): no end date, no usual-round fallback.
+    const frT = `Calendrier de livraison de votre magasin : ${up.length ? 'prochaines livraisons les ' + L.fr : 'aucune livraison prévue'}.`;
+    const nlT = `Leverkalender voor uw winkel: ${up.length ? 'volgende leveringen op ' + L.nl : 'geen leveringen gepland'}.`;
     if (lang === 'fr') return frT;
     if (lang === 'nl') return nlT;
     return `${frT} / ${nlT}`;
@@ -699,14 +716,14 @@ function updateDeliveryDateHint() {
   const humanDate = formatDateHuman(minDeliveryDateFor(store));
   const minDays = minDeliveryDaysFor(store);
   const days = store ? getAllowedWeekdays(store) : null;
-  if (hasDeliveryOverride(store) && formatDateISO(new Date()) <= DELIVERY_OVERRIDES_THROUGH) {
+  if (hasDeliveryOverride(store)) {
     const up = upcomingOverrideDates(store);
     const L = overrideDateLabels(up);
-    const through = formatDateHuman(new Date(DELIVERY_OVERRIDES_THROUGH + 'T00:00:00'));
-    const usual = days ? formatAllowedDays(days) : { fr: '', nl: '' };
+    // (see DELIVERY_BIWEEKLY above)
+    // Permanent schedule (DELIVERY_BIWEEKLY): no end date, no usual-round fallback.
     deliveryDateHint.textContent = bi(
-      `Calendrier exceptionnel pour votre magasin jusqu'au ${through} : ${up.length ? 'livraisons les ' + L.fr : 'aucune livraison prévue'}. Ensuite, tournée habituelle (${usual.fr}). Les autres jours sont grisés dans le calendrier.`,
-      `Uitzonderlijke kalender voor uw winkel tot ${through}: ${up.length ? 'leveringen op ' + L.nl : 'geen leveringen gepland'}. Daarna de gewone ronde (${usual.nl}). De andere dagen zijn grijs in de kalender.`
+      `Calendrier de livraison de votre magasin : ${up.length ? 'prochaines livraisons les ' + L.fr : 'aucune livraison prévue'}. Les autres jours sont grisés dans le calendrier.`,
+      `Leverkalender voor uw winkel: ${up.length ? 'volgende leveringen op ' + L.nl : 'geen leveringen gepland'}. De andere dagen zijn grijs in de kalender.`
     );
   } else if (days) {
     const { fr, nl } = formatAllowedDays(days);
@@ -729,8 +746,8 @@ function buildDeliveryDateDisableFn(store) {
   return function (date) {
     const wd = date.getDay();
     if (wd === 0 || wd === 6 || isBelgianHoliday(date)) return true;
-    if (hasDeliveryOverride(store) && formatDateISO(date) <= DELIVERY_OVERRIDES_THROUGH) {
-      return !DELIVERY_DATE_OVERRIDES[store].includes(formatDateISO(date));
+    if (hasDeliveryOverride(store)) {
+      return !matchesBiweekly(store, formatDateISO(date));
     }
     if (days && !days.includes(wd)) return true;
     return false;
